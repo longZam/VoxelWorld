@@ -7,18 +7,39 @@ public class World
 {
     // 각 axis에 대해 정렬된 리스트를 만들고, 이진 탐색으로 탐색하기?
     private readonly IChunkLoader chunkLoader;
-    private readonly Dictionary<Vector3Int, Chunk> chunks;
+    private readonly Octree<Chunk> chunkTree;
+    private readonly ReaderWriterLockSlim chunkReaderWriterLockSlim;
 
 
     public World(IChunkLoader chunkLoader)
     {
         this.chunkLoader = chunkLoader;
-        this.chunks = new Dictionary<Vector3Int, Chunk>();
+        this.chunkTree = new Octree<Chunk>(268_435_456);
+        this.chunkReaderWriterLockSlim = new ReaderWriterLockSlim();
     }
     
+    public async Task<Chunk> LoadChunkAsync(Vector3Int position, CancellationToken cancellationToken = default)
+    {
+        Chunk? result = null;
+
+        chunkReaderWriterLockSlim.EnterReadLock();
+        if (chunkTree.TrySearch(position, out result))
+            return result;
+        chunkReaderWriterLockSlim.ExitReadLock();
+
+        result = await chunkLoader.LoadChunkAsync(position, cancellationToken);
+
+        chunkReaderWriterLockSlim.EnterWriteLock();
+        chunkTree.Insert(position, result);
+        chunkReaderWriterLockSlim.ExitWriteLock();
+
+        return result;
+    }
+
     public static Vector2Int WorldToRegion(Vector3Int worldPosition)
     {
-        return worldPosition / Region.BLOCK_CORNER;
+        worldPosition /= Region.BLOCK_CORNER;
+        return new(worldPosition.x, worldPosition.y);
     }
 
     public static Vector3Int WorldToChunk(Vector3Int worldPosition)

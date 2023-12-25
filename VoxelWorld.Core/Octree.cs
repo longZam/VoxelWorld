@@ -127,8 +127,6 @@ public class Octree<T>
         
         if (node is InternalNode internalNode)
         {
-            Console.WriteLine("===============");
-            Console.WriteLine($"rect: {internalNode.min}, {internalNode.max}");
             for (int i = 0; i < 8; i++)
                 Preorder(internalNode.children[i], action);
             

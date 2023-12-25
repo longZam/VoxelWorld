@@ -14,7 +14,6 @@ public class Region
     public const int BLOCK_SIDE = CHUNK_SIDE * Chunk.SIDE;
     public const int BLOCK_VOLUME = CHUNK_VOLUME * Chunk.VOLUME;
 
-    private readonly Vector2Int position;
     private readonly Chunk[] chunks;
     
 
@@ -23,13 +22,9 @@ public class Region
         get => chunks[LocalToIndex(new Vector3Int(x, y, z))];
     }
 
-    public Region(Vector2Int position, bool clear = false)
+    public Region(bool clear = false)
     {
-        this.position = position;
         this.chunks = ArrayPool<Chunk>.Shared.Rent(CHUNK_VOLUME);
-
-        Vector3Int offset = World.RegionToWorld(position);
-        offset = World.WorldToChunk(offset);
 
         for (int i = 0; i < CHUNK_VOLUME; i++)
             this.chunks[i] = new Chunk(clear);

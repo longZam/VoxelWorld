@@ -11,6 +11,7 @@ public class Chunk
     public const int VOLUME = CORNER * CORNER * CORNER;
 
     private readonly BlockType[] rawData;
+    public bool initialized;
 
 
     public BlockType this[int x, int y, int z]
@@ -49,13 +50,19 @@ public class Chunk
 
     public void Serialize(BinaryWriter binaryWriter)
     {
-        for (int i = 0; i < VOLUME; i++)
-            binaryWriter.Write((ushort)rawData[i]);
+        binaryWriter.Write(initialized);
+
+        if (initialized)
+            for (int i = 0; i < VOLUME; i++)
+                binaryWriter.Write((ushort)rawData[i]);
     }
 
     public void Deserialize(BinaryReader binaryReader)
     {
-        for (int i = 0; i < VOLUME; i++)
-            rawData[i] = (BlockType)binaryReader.ReadUInt16();
+        initialized = binaryReader.ReadBoolean();
+
+        if (initialized)
+            for (int i = 0; i < VOLUME; i++)
+                rawData[i] = (BlockType)binaryReader.ReadUInt16();
     }
 }
