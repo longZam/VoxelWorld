@@ -4,6 +4,8 @@ public struct Vector3Int
 {
     public static readonly Vector3Int Zero = new Vector3Int(0, 0, 0);
     public static readonly Vector3Int One = new Vector3Int(1, 1, 1);
+    public static readonly Vector3Int Max = new Vector3Int(int.MaxValue, int.MaxValue, int.MaxValue);
+    public static readonly Vector3Int Min = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
 
 
     public int x, y, z;
