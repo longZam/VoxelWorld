@@ -30,7 +30,7 @@ public class Octree<T>
         {
             this.min = min;
             this.max = max;
-            this.center = max / 2 + min / 2;
+            this.center = (max + min + Vector3Int.One) / 2;
         }
     }
 
@@ -58,7 +58,7 @@ public class Octree<T>
                 if (childLeafNode.position == position)
                     throw new ArgumentException($"Item with same key has already been added");
                 
-                Vector3Int newChildSize = current.max / 2 - current.min / 2;
+                Vector3Int newChildSize = (current.max - current.min + Vector3Int.One) / 2; // 여기서 문제?
                 Vector3Int newChildMin = GetChildMinFromOffset(offset, current.min, newChildSize);
 
                 InternalNode newChildInternalNode = new InternalNode(newChildMin, newChildMin + newChildSize);
