@@ -25,10 +25,12 @@ public class FileSystemChunkLoader : IChunkLoader
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        Vector2Int regionPosition = new Vector2Int(chunkPosition.x, chunkPosition.y) / Region.CHUNK_CORNER;
+        Vector2Int regionPosition = World.ChunkToRegion(chunkPosition);
+
         int x = chunkPosition.x % Region.CHUNK_CORNER;
         int y = chunkPosition.y % Region.CHUNK_CORNER;
         int z = chunkPosition.z % Region.CHUNK_CORNER;
+
         if (x < 0)
             x += Region.CHUNK_CORNER;
         if (y < 0)
