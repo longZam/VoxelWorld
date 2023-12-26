@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using VoxelWorld.Core.WorldLoaders;
 
 namespace VoxelWorld.Core;
@@ -8,6 +9,7 @@ public class World
     private readonly IChunkLoader chunkLoader;
     private readonly Octree<Chunk> chunkTree;
     private readonly ReaderWriterLockSlim chunkReaderWriterLockSlim;
+    private readonly ConcurrentDictionary<Vector3Int, SemaphoreSlim> requestSemaphores;
 
 
     public World(IChunkLoader chunkLoader)
@@ -15,22 +17,45 @@ public class World
         this.chunkLoader = chunkLoader;
         this.chunkTree = new Octree<Chunk>(Vector3Int.Min / Chunk.CORNER, Vector3Int.Max / Chunk.CORNER);
         this.chunkReaderWriterLockSlim = new ReaderWriterLockSlim();
+        this.requestSemaphores = new ConcurrentDictionary<Vector3Int, SemaphoreSlim>();
     }
     
     public async Task<Chunk> LoadChunkAsync(Vector3Int position, CancellationToken cancellationToken = default)
     {
-        Chunk? result = null;
+        Chunk? result;
 
-        chunkReaderWriterLockSlim.EnterReadLock();
-        if (chunkTree.TrySearch(position, out result))
-            return result;
-        chunkReaderWriterLockSlim.ExitReadLock();
+        var semaphore = requestSemaphores.GetOrAdd(position, _ => new SemaphoreSlim(1, 1));
+        await semaphore.WaitAsync(cancellationToken);
 
-        result = await chunkLoader.LoadChunkAsync(position, cancellationToken);
+        try
+        {
+            chunkReaderWriterLockSlim.EnterReadLock();
+            try
+            {
+                if (chunkTree.TrySearch(position, out result))
+                    return result;
+            }
+            finally
+            {
+                chunkReaderWriterLockSlim.ExitReadLock();
+            }
 
-        chunkReaderWriterLockSlim.EnterWriteLock();
-        chunkTree.Insert(position, result);
-        chunkReaderWriterLockSlim.ExitWriteLock();
+            result = await chunkLoader.LoadChunkAsync(position, cancellationToken);
+
+            chunkReaderWriterLockSlim.EnterWriteLock();
+            try
+            {
+                chunkTree.Insert(position, result);
+            }
+            finally
+            {
+                chunkReaderWriterLockSlim.ExitWriteLock();
+            }
+        }
+        finally
+        {
+            semaphore.Release();
+        }
 
         return result;
     }
