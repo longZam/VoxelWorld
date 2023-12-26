@@ -38,9 +38,9 @@ public class Octree<T>
     private readonly InternalNode root;
 
 
-    public Octree(int size)
+    public Octree(Vector3Int min, Vector3Int max)
     {
-        this.root = new InternalNode(Vector3Int.One * -size / 2, Vector3Int.One * size / 2);
+        this.root = new InternalNode(min, max);
     }
 
 
