@@ -8,59 +8,66 @@ namespace VoxelWorld.Core.WorldLoaders;
 public class FileSystemRegionLoader : IRegionLoader
 {
     private readonly string directoryPath;
-    private readonly ConcurrentDictionary<Vector2Int, TaskCompletionSource<Region>> requests;
-    private readonly ConcurrentDictionary<Vector2Int, Region> cache;
+    private readonly Octree<Region> regionTree;
+    private readonly ConcurrentDictionary<Vector2Int, SemaphoreSlim> requestSemaphores;
 
 
     public FileSystemRegionLoader(string directoryPath)
     {
         this.directoryPath = directoryPath;
-        this.requests = new ConcurrentDictionary<Vector2Int, TaskCompletionSource<Region>>();
-        this.cache = new ConcurrentDictionary<Vector2Int, Region>();
+        this.regionTree = new Octree<Region>(Vector3Int.Min / Region.BLOCK_CORNER, Vector3Int.Max / Region.BLOCK_CORNER);
+        this.requestSemaphores = new ConcurrentDictionary<Vector2Int, SemaphoreSlim>();
     }
 
     public async Task<Region> LoadRegionAsync(Vector2Int regionPosition, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (cache.TryGetValue(regionPosition, out var result))
-            return result;
+        var semaphore = requestSemaphores.GetOrAdd(regionPosition, _ => new SemaphoreSlim(1, 1));
+        await semaphore.WaitAsync(cancellationToken);
 
-        // 이미 로드 중인 작업 있으면 그 작업에 대기하기
-        if (requests.TryGetValue(regionPosition, out var tcs))
-            return await tcs.Task.WaitAsync(cancellationToken);
-
-        // 서로 추가하다가 실패한 쪽은 task를 얻어서 대기하기
-        if (!requests.TryAdd(regionPosition, new TaskCompletionSource<Region>()))
-            return await requests[regionPosition].Task.WaitAsync(cancellationToken);
-
-        string regionPath = Path.Combine(directoryPath, $"{regionPosition.x}_{regionPosition.y}.region");
-        Region region = new Region();
-
-        // 파일 시스템에서 이미 Region이 존재하는지 확인하고 읽어들임
-        if (File.Exists(regionPath))
+        try
         {
-            using FileStream fileStream = File.OpenRead(regionPath);
-            using GZipStream gZipStream = new GZipStream(fileStream, CompressionMode.Decompress);
-            using BinaryReader binaryReader = new BinaryReader(gZipStream);
+            Vector3Int rPos3D = new Vector3Int(regionPosition.x, regionPosition.y, 0);
 
-            region.Deserialize(binaryReader);
+            // 캐싱되어 있는 region은 바로 반환
+            if (regionTree.TrySearch(rPos3D, out var result))
+                return result;
+            
+            // 캐싱되어 있지 않으니 직접 생성하여 메모리에 올리기
+            string regionPath = Path.Combine(directoryPath, $"{regionPosition.x}_{regionPosition.y}.region");
+            result = new Region();
+
+            // 파일 시스템에서 이미 Region이 존재하는지 확인하고 읽어들임
+            if (File.Exists(regionPath))
+            {
+                using FileStream fileStream = File.OpenRead(regionPath);
+                using GZipStream gZipStream = new GZipStream(fileStream, CompressionMode.Decompress);
+                using BinaryReader binaryReader = new BinaryReader(gZipStream);
+
+                result.Deserialize(binaryReader);
+            }
+
+            // 나중에 빠르게 접근하기 위한 캐싱
+            regionTree.Insert(rPos3D, result);
+            // 요청 세마포어 쌓이지 않게 제거
+            requestSemaphores.Remove(regionPosition, out var value);
+
+            // 결과 반환
+            return result;
         }
-
-        // 작업이 완료되었으니 dictionary에서 tcs를 제거하고 대기자들에게 결과를 통지
-        if (requests.Remove(regionPosition, out tcs))
-            tcs.SetResult(region);
-
-        cache.TryAdd(regionPosition, region);
-        return region;
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     public async Task Save()
     {
         List<Task> tasks = new List<Task>();
 
-        foreach (var regionKvp in cache)
-            tasks.Add(Task.Run(() => Save(directoryPath, regionKvp.Key, regionKvp.Value)));
+        regionTree.Preorder((position, region) =>
+            tasks.Add(Task.Run(() => Save(directoryPath, new Vector2Int(position.x, position.y), region))));
         
         await Task.WhenAll(tasks);
     }

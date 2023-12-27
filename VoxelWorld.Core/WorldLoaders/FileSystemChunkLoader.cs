@@ -10,20 +10,21 @@ namespace VoxelWorld.Core;
 public class FileSystemChunkLoader : IChunkLoader
 {
     private readonly FileSystemRegionLoader regionLoader;
-    private readonly ConcurrentDictionary<Vector3Int, TaskCompletionSource<Chunk>> requests;
     private readonly WorldGenerator worldGenerator;
+    private readonly ConcurrentDictionary<Vector3Int, SemaphoreSlim> requestSemaphores;
 
 
     public FileSystemChunkLoader(FileSystemRegionLoader regionLoader, WorldGenerator worldGenerator)
     {
         this.regionLoader = regionLoader;
-        this.requests = new ConcurrentDictionary<Vector3Int, TaskCompletionSource<Chunk>>();
         this.worldGenerator = worldGenerator;
+        this.requestSemaphores = new ConcurrentDictionary<Vector3Int, SemaphoreSlim>();
     }
 
     public async Task<Chunk> LoadChunkAsync(Vector3Int chunkPosition, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+
 
         Vector2Int regionPosition = World.ChunkToRegion(chunkPosition);
 
@@ -37,23 +38,27 @@ public class FileSystemChunkLoader : IChunkLoader
             y += Region.CHUNK_CORNER;
         if (z < 0)
             z += Region.CHUNK_CORNER;
-        
-        // 이미 로드 중인 작업 있으면 그 작업에 대기하기
-        if (requests.TryGetValue(chunkPosition, out var tcs))
-            return await tcs.Task.WaitAsync(cancellationToken);
 
-        // 서로 추가하다가 실패한 쪽은 task를 얻어서 대기하기
-        if (!requests.TryAdd(chunkPosition, new TaskCompletionSource<Chunk>()))
-            return await requests[chunkPosition].Task.WaitAsync(cancellationToken);
-        
         Region result = await regionLoader.LoadRegionAsync(regionPosition, cancellationToken);
 
-        if (!result[x, y, z].initialized)
-            worldGenerator.Modify(chunkPosition, result[x, y, z]);
+        var semaphore = requestSemaphores.GetOrAdd(chunkPosition, _ => new SemaphoreSlim(1, 1));
+        await semaphore.WaitAsync(cancellationToken);
 
-        if (requests.Remove(chunkPosition, out tcs))
-            tcs.SetResult(result[x, y, z]);
-        
-        return result[x, y, z];
+        try
+        {
+            // 초기화 안 된 청크는 초기화 작업
+            if (!result[x, y, z].initialized)
+                worldGenerator.Modify(chunkPosition, result[x, y, z]);
+
+            // 요청 세마포어 쌓이지 않게 제거
+            requestSemaphores.Remove(chunkPosition, out var value);
+
+            // 결과 반환
+            return result[x, y, z];
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 }
