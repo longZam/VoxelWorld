@@ -8,7 +8,6 @@ public class World
 {
     private readonly IChunkLoader chunkLoader;
     private readonly Octree<Chunk> chunkTree;
-    private readonly ReaderWriterLockSlim chunkReaderWriterLockSlim;
     private readonly ConcurrentDictionary<Vector3Int, SemaphoreSlim> requestSemaphores;
 
 
@@ -16,7 +15,6 @@ public class World
     {
         this.chunkLoader = chunkLoader;
         this.chunkTree = new Octree<Chunk>(Vector3Int.Min / Chunk.CORNER, Vector3Int.Max / Chunk.CORNER);
-        this.chunkReaderWriterLockSlim = new ReaderWriterLockSlim();
         this.requestSemaphores = new ConcurrentDictionary<Vector3Int, SemaphoreSlim>();
     }
     
@@ -24,33 +22,19 @@ public class World
     {
         Chunk? result;
 
+        // 같은 요청에 대해 동시에 수행할 수 없도록 락 걸기
+        // 해시 충돌이 우려되긴 하나, 아주 약간의 성능 저하만이 예상되므로 무시 가능하다고 판단
         var semaphore = requestSemaphores.GetOrAdd(position, _ => new SemaphoreSlim(1, 1));
         await semaphore.WaitAsync(cancellationToken);
 
         try
         {
-            chunkReaderWriterLockSlim.EnterReadLock();
-            try
-            {
-                if (chunkTree.TrySearch(position, out result))
-                    return result;
-            }
-            finally
-            {
-                chunkReaderWriterLockSlim.ExitReadLock();
-            }
+            if (chunkTree.TrySearch(position, out result))
+                return result;
 
             result = await chunkLoader.LoadChunkAsync(position, cancellationToken);
 
-            chunkReaderWriterLockSlim.EnterWriteLock();
-            try
-            {
-                chunkTree.Insert(position, result);
-            }
-            finally
-            {
-                chunkReaderWriterLockSlim.ExitWriteLock();
-            }
+            chunkTree.Insert(position, result);
         }
         finally
         {

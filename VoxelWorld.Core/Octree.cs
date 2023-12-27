@@ -36,52 +36,72 @@ public class Octree<T>
 
 
     private readonly InternalNode root;
+    private readonly ReaderWriterLockSlim rwlock;
 
 
     public Octree(Vector3Int min, Vector3Int max)
     {
         this.root = new InternalNode(min, max);
+        this.rwlock = new ReaderWriterLockSlim();
     }
 
 
     public void Insert(Vector3Int position, T item)
     {
-        InternalNode current = root;
+        rwlock.EnterWriteLock();
 
-        while (true)
+        try
         {
-            int offset = GetOffsetFromPositionalRelationship(current.center, position);
-            INode? child = current.children[offset];
-            
-            if (child is LeafNode childLeafNode)
-            {
-                if (childLeafNode.position == position)
-                    throw new ArgumentException($"Item with same key has already been added");
-                
-                Vector3Int newChildSize = (current.max - current.min + Vector3Int.One) / 2; // 여기서 문제?
-                Vector3Int newChildMin = GetChildMinFromOffset(offset, current.min, newChildSize);
+            InternalNode current = root;
 
-                InternalNode newChildInternalNode = new InternalNode(newChildMin, newChildMin + newChildSize);
-                int childLeafOffset = GetOffsetFromPositionalRelationship(newChildInternalNode.center, childLeafNode.position);
-                newChildInternalNode.children[childLeafOffset] = childLeafNode;
-                current.children[offset] = newChildInternalNode;
-                current = newChildInternalNode;
-            }
-            else if (child is InternalNode childInternalNode)
+            while (true)
             {
-                current = childInternalNode;
+                int offset = GetOffsetFromPositionalRelationship(current.center, position);
+                INode? child = current.children[offset];
+
+                if (child is LeafNode childLeafNode)
+                {
+                    if (childLeafNode.position == position)
+                        throw new ArgumentException($"Item with same key has already been added");
+
+                    Vector3Int newChildSize = (current.max - current.min + Vector3Int.One) / 2; // 여기서 문제?
+                    Vector3Int newChildMin = GetChildMinFromOffset(offset, current.min, newChildSize);
+
+                    InternalNode newChildInternalNode = new InternalNode(newChildMin, newChildMin + newChildSize);
+                    int childLeafOffset = GetOffsetFromPositionalRelationship(newChildInternalNode.center, childLeafNode.position);
+                    newChildInternalNode.children[childLeafOffset] = childLeafNode;
+                    current.children[offset] = newChildInternalNode;
+                    current = newChildInternalNode;
+                }
+                else if (child is InternalNode childInternalNode)
+                {
+                    current = childInternalNode;
+                }
+                else
+                {
+                    current.children[offset] = new LeafNode(position, item);
+                    break;
+                }
             }
-            else
-            {
-                current.children[offset] = new LeafNode(position, item);
-                break;
-            }
+
+        }
+        finally
+        {
+            rwlock.ExitWriteLock();
         }
     }
 
     public bool Remove(Vector3Int position)
     {
-        return Remove(root, position);
+        rwlock.EnterWriteLock();
+        try
+        {
+            return Remove(root, position);
+        }
+        finally
+        {
+            rwlock.ExitWriteLock();
+        }
     }
 
     private bool Remove(InternalNode parent, Vector3Int position)
@@ -97,15 +117,15 @@ public class Octree<T>
                 for (int i = 0; i < 8; i++)
                     if (internalNode.children[i] != null)
                         return true;
-                
+
                 // 자식이 하나도 없는 내부 노드를 제거
                 parent.children[offset] = null;
                 return true;
             }
-            
+
             return false;
         }
-        
+
         if (child is LeafNode leafNode)
         {
             parent.children[offset] = null;
@@ -117,19 +137,27 @@ public class Octree<T>
 
     public void Preorder(Action<Vector3Int, T> action)
     {
-        Preorder(root, action);
+        rwlock.EnterReadLock();
+        try
+        {
+            Preorder(root, action);
+        }
+        finally
+        {
+            rwlock.ExitReadLock();
+        }
     }
 
     private void Preorder(INode? node, Action<Vector3Int, T> action)
     {
         if (node == null)
             return;
-        
+
         if (node is InternalNode internalNode)
         {
             for (int i = 0; i < 8; i++)
                 Preorder(internalNode.children[i], action);
-            
+
             return;
         }
 
@@ -142,30 +170,41 @@ public class Octree<T>
 
     public bool TrySearch(Vector3Int position, [NotNullWhen(true)] out T? result)
     {
-        InternalNode current = root;
+        rwlock.EnterReadLock();
 
-        while (true)
+        try
         {
-            int offset = GetOffsetFromPositionalRelationship(current.center, position);
-            var child = current.children[offset];
+            InternalNode current = root;
 
-            if (child is InternalNode childInternalNode)
+            while (true)
             {
-                current = childInternalNode;
-                continue;
-            }
-            else if (child is LeafNode childLeafNode)
-            {
-                if (childLeafNode.position == position)
+                int offset = GetOffsetFromPositionalRelationship(current.center, position);
+                var child = current.children[offset];
+
+                if (child is InternalNode childInternalNode)
                 {
-                    result = childLeafNode.item;
-                    return true;
+                    current = childInternalNode;
+                    continue;
                 }
+                else if (child is LeafNode childLeafNode)
+                {
+                    if (childLeafNode.position == position)
+                    {
+                        result = childLeafNode.item;
+                        return true;
+                    }
+                }
+
+                result = default;
+                return false;
             }
 
-            result = default;
-            return false;
         }
+        finally
+        {
+            rwlock.ExitReadLock();
+        }
+
     }
 
     public bool BoundChecking(Vector3Int position)
@@ -185,21 +224,21 @@ public class Octree<T>
             childMin.y += childSize.y;
         if ((offset & 4) != 0)
             childMin.z += childSize.z;
-        
+
         return childMin;
     }
 
     private static int GetOffsetFromPositionalRelationship(Vector3Int start, Vector3Int end)
     {
         int offset = 0;
-        
+
         if (start.x <= end.x)
             offset += 1;
         if (start.y <= end.y)
             offset += 2;
         if (start.z <= end.z)
             offset += 4;
-        
+
         return offset;
     }
 }
