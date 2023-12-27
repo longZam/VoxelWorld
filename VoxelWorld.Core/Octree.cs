@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 
 namespace VoxelWorld.Core;
@@ -23,14 +24,20 @@ public class Octree<T>
 
     private sealed class InternalNode : INode
     {
-        public readonly INode?[] children = new INode?[8];
+        public readonly INode?[] children;
         public readonly Vector3Int min, max, center;
 
         public InternalNode(Vector3Int min, Vector3Int max)
         {
+            children = ArrayPool<INode?>.Shared.Rent(8);
             this.min = min;
             this.max = max;
             this.center = (max + min + Vector3Int.One) / 2;
+        }
+
+        ~InternalNode()
+        {
+            ArrayPool<INode?>.Shared.Return(children, true);
         }
     }
 
