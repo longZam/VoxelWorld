@@ -59,15 +59,15 @@ public class World
 
     public static Vector2Int ChunkToRegion(Vector3Int chunkPosition)
     {
-        return new Vector2Int(chunkPosition.x >> 4,
-                            chunkPosition.y >> 4);
+        return new Vector2Int(chunkPosition.x >> Region.CHUNK_CORNER_BIT,
+                            chunkPosition.y >> Region.CHUNK_CORNER_BIT);
     }
 
     public static Vector3Int WorldToChunk(Vector3Int worldPosition)
     {
-        return new Vector3Int(worldPosition.x >> 4,
-                            worldPosition.y >> 4,
-                            worldPosition.z >> 4);
+        return new Vector3Int(worldPosition.x >> Chunk.CORNER_BIT,
+                            worldPosition.y >> Chunk.CORNER_BIT,
+                            worldPosition.z >> Chunk.CORNER_BIT);
     }
     
     public static Vector3Int RegionToChunk(Vector2Int regionPosition)

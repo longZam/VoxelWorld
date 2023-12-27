@@ -6,7 +6,8 @@ namespace VoxelWorld.Core;
 
 public class Chunk
 {
-    public const int CORNER = 16;
+    public const int CORNER_BIT = 4;
+    public const int CORNER = CORNER_BIT * CORNER_BIT;
     public const int SIDE = CORNER * CORNER;
     public const int VOLUME = CORNER * CORNER * CORNER;
 

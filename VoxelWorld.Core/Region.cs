@@ -7,7 +7,8 @@ namespace VoxelWorld.Core;
 // world의 최소 파일 단위인 .region의 클래스
 public class Region
 {
-    public const int CHUNK_CORNER = 16;
+    public const int CHUNK_CORNER_BIT = 4;
+    public const int CHUNK_CORNER = CHUNK_CORNER_BIT * CHUNK_CORNER_BIT;
     public const int CHUNK_SIDE = CHUNK_CORNER * CHUNK_CORNER;
     public const int CHUNK_VOLUME = CHUNK_CORNER * CHUNK_CORNER * CHUNK_CORNER;
     public const int BLOCK_CORNER = CHUNK_CORNER * Chunk.CORNER;
