@@ -7,9 +7,9 @@ namespace VoxelWorld.Core;
 public class Octree<T>
     where T : notnull
 {
-    private interface INode { }
+    public interface INode { }
 
-    private sealed class LeafNode : INode
+    public sealed class LeafNode : INode
     {
         public readonly Vector3Int position;
         public readonly T item;
@@ -22,7 +22,7 @@ public class Octree<T>
         }
     }
 
-    private sealed class InternalNode : INode
+    public sealed class InternalNode : INode
     {
         public readonly INode?[] children;
         public readonly Vector3Int min, max, center;
@@ -101,6 +101,7 @@ public class Octree<T>
     public bool Remove(Vector3Int position)
     {
         rwlock.EnterWriteLock();
+
         try
         {
             return Remove(root, position);
@@ -145,6 +146,7 @@ public class Octree<T>
     public void Preorder(Action<Vector3Int, T> action)
     {
         rwlock.EnterReadLock();
+        
         try
         {
             Preorder(root, action);
@@ -213,13 +215,61 @@ public class Octree<T>
         }
 
     }
-
-    public bool BoundChecking(Vector3Int position)
+    
+    public void OverlapCubeAll(Vector3Int min, Vector3Int max, List<LeafNode> results)
     {
-        return root.min.x <= position.x && position.x <= root.max.x &&
-            root.min.y <= position.y && position.y <= root.max.y &&
-            root.min.z <= position.z && position.z <= root.max.z;
+        results.Clear();
+
+        rwlock.EnterReadLock();
+
+        try
+        {
+            OverlapCubeAll(root, min, max, results);
+        }
+        finally
+        {
+            rwlock.ExitReadLock();
+        }
     }
+
+    private static void OverlapCubeAll(InternalNode current, Vector3Int min, Vector3Int max, List<LeafNode> results)
+    {
+        // 해당 internalNode가 쿼리 범위와 겹치지 않으면 자식 또한 겹치지 않으므로 제외 가능함
+        if (!CollisionCheck(min, max, current.min, current.max))
+            return;
+
+        for (int i = 0; i < 8; i++)
+        {
+            var child = current.children[i];
+            
+            if (child == null)
+                continue;
+            // 자식 internalNode에 재귀적으로 수행
+            else if (child is InternalNode childInternalNode)
+                OverlapCubeAll(childInternalNode, min, max, results);
+            else if (child is LeafNode childLeafNode)
+                if (CollisionCheck(min, max, childLeafNode.position, childLeafNode.position))
+                    results.Add(childLeafNode);
+        }
+    }
+
+    public static bool CollisionCheck(Vector3Int aMin, Vector3Int aMax, Vector3Int bMin, Vector3Int bMax)
+    {
+        // X 축에 대한 충돌 여부 확인
+        if (aMax.x < bMin.x || aMin.x > bMax.x)
+            return false;
+
+        // Y 축에 대한 충돌 여부 확인
+        if (aMax.y < bMin.y || aMin.y > bMax.y)
+            return false;
+
+        // Z 축에 대한 충돌 여부 확인
+        if (aMax.z < bMin.z || aMin.z > bMax.z)
+            return false;
+
+        return true;
+    }
+
 
     private static Vector3Int GetChildMinFromOffset(int offset, Vector3Int parentMin, Vector3Int childSize)
     {
