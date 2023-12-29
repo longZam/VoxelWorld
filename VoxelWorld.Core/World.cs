@@ -37,7 +37,7 @@ public class World
             result = await chunkLoader.LoadChunkAsync(position, cancellationToken);
 
             // 나중에 빠르게 접근하기 위한 캐싱
-            chunkTree.Insert(position, result);
+            await Task.Run(() => chunkTree.Insert(position, result), cancellationToken);
 
             // 요청 세마포어 쌓이지 않게 제거
             requestSemaphores.Remove(position, out var value);

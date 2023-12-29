@@ -35,21 +35,25 @@ public class FileSystemRegionLoader : IRegionLoader
                 return result;
             
             // 캐싱되어 있지 않으니 직접 생성하여 메모리에 올리기
-            string regionPath = Path.Combine(directoryPath, $"{regionPosition.x}_{regionPosition.y}.region");
             result = new Region();
 
-            // 파일 시스템에서 이미 Region이 존재하는지 확인하고 읽어들임
-            if (File.Exists(regionPath))
+            await Task.Run(() =>
             {
+                string regionPath = Path.Combine(directoryPath, $"{regionPosition.x}_{regionPosition.y}.region");
+                
+                // 파일 시스템에서 이미 Region이 존재하는지 확인하고 읽어들임
+                if (!File.Exists(regionPath))
+                    return;
                 using FileStream fileStream = File.OpenRead(regionPath);
                 using GZipStream gZipStream = new GZipStream(fileStream, CompressionMode.Decompress);
                 using BinaryReader binaryReader = new BinaryReader(gZipStream);
-
                 result.Deserialize(binaryReader);
-            }
+
+            }, cancellationToken);
+
 
             // 나중에 빠르게 접근하기 위한 캐싱
-            regionTree.Insert(rPos3D, result);
+            await Task.Run(() => regionTree.Insert(rPos3D, result), cancellationToken);
             // 요청 세마포어 쌓이지 않게 제거
             requestSemaphores.Remove(regionPosition, out var value);
 

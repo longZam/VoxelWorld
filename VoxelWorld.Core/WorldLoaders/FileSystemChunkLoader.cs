@@ -40,7 +40,6 @@ public class FileSystemChunkLoader : IChunkLoader
             z = chunkPosition.z % Region.CHUNK_CORNER
         };
 
-
         // 음수에 대한 로컬 좌표 처리
         if (localChunkPosition.x < 0)
             localChunkPosition.x += Region.CHUNK_CORNER;
@@ -59,7 +58,7 @@ public class FileSystemChunkLoader : IChunkLoader
         {
             // 초기화 안 된 청크는 초기화 작업
             if (!result[localChunkPosition].initialized)
-                worldGenerator.Modify(chunkPosition, result[localChunkPosition]);
+                await Task.Run(() => worldGenerator.Modify(chunkPosition, result[localChunkPosition]), cancellationToken);
 
             // 요청 세마포어 쌓이지 않게 제거
             requestSemaphores.Remove(chunkPosition, out var value);
