@@ -15,26 +15,27 @@ public class Chunk
     public bool initialized;
 
 
-    public BlockType this[int x, int y, int z]
+    public BlockType this[Vector3Int position]
     {
         get
         {
-            Debug.Assert(0 <= x && x < CORNER, $"x must be 0 <= x < {CORNER}, x = {x}");
-            Debug.Assert(0 <= y && y < CORNER, $"y must be 0 <= y < {CORNER}, y = {y}");
-            Debug.Assert(0 <= z && z < CORNER, $"z must be 0 <= z < {CORNER}, z = {z}");
+            Debug.Assert(0 <= position.x && position.x < CORNER, $"x must be 0 <= x < {CORNER}, x = {position.x}");
+            Debug.Assert(0 <= position.y && position.y < CORNER, $"y must be 0 <= y < {CORNER}, y = {position.y}");
+            Debug.Assert(0 <= position.z && position.z < CORNER, $"z must be 0 <= z < {CORNER}, z = {position.z}");
 
-            return rawData[x + CORNER * y + SIDE * z];
+            return rawData[position.x + CORNER * position.y + SIDE * position.z];
         }
 
         set
         {
-            Debug.Assert(0 <= x && x < CORNER, $"x must be 0 <= x < {CORNER}, x = {x}");
-            Debug.Assert(0 <= y && y < CORNER, $"y must be 0 <= y < {CORNER}, y = {y}");
-            Debug.Assert(0 <= z && z < CORNER, $"z must be 0 <= z < {CORNER}, z = {z}");
+            Debug.Assert(0 <= position.x && position.x < CORNER, $"x must be 0 <= x < {CORNER}, x = {position.x}");
+            Debug.Assert(0 <= position.y && position.y < CORNER, $"y must be 0 <= y < {CORNER}, y = {position.y}");
+            Debug.Assert(0 <= position.z && position.z < CORNER, $"z must be 0 <= z < {CORNER}, z = {position.z}");
 
-            rawData[x + CORNER * y + SIDE * z] = value;
+            rawData[position.x + CORNER * position.y + SIDE * position.z] = value;
         }
     }
+
 
     public Chunk(bool clear = false)
     {

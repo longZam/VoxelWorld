@@ -1,7 +1,7 @@
 namespace VoxelWorld.Core;
 
 
-public delegate BlockType WorldModifier(BlockType previousBlock, PerlinNoise3D noiseGenerator, int x, int y, int z);
+public delegate BlockType WorldModifier(BlockType previousBlock, PerlinNoise3D noiseGenerator, Vector3Int worldPosition);
 
 public class WorldGenerator
 {
@@ -36,14 +36,8 @@ public class WorldGenerator
                     y = index / Chunk.CORNER % Chunk.CORNER,
                     z = index / Chunk.SIDE % Chunk.CORNER
                 };
-                
-                chunk[localPosition.x, localPosition.y, localPosition.z] = 
-                                modifier.Invoke(chunk[localPosition.x, localPosition.y, localPosition.z],
-                                noiseGenerator,
-                                localPosition.x + worldOffset.x,
-                                localPosition.y + worldOffset.y,
-                                localPosition.z + worldOffset.z);
-                
+
+                chunk[localPosition] = modifier.Invoke(chunk[localPosition], noiseGenerator, localPosition + worldOffset);
             });
         }
 

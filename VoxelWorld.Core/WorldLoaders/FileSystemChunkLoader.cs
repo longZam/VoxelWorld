@@ -33,17 +33,21 @@ public class FileSystemChunkLoader : IChunkLoader
         Vector2Int regionPosition = World.ChunkToRegion(chunkPosition);
 
         // region 내에서의 로컬 청크 좌표 계산
-        int x = chunkPosition.x % Region.CHUNK_CORNER;
-        int y = chunkPosition.y % Region.CHUNK_CORNER;
-        int z = chunkPosition.z % Region.CHUNK_CORNER;
+        Vector3Int localChunkPosition = new()
+        {
+            x = chunkPosition.x % Region.CHUNK_CORNER,
+            y = chunkPosition.y % Region.CHUNK_CORNER,
+            z = chunkPosition.z % Region.CHUNK_CORNER
+        };
+
 
         // 음수에 대한 로컬 좌표 처리
-        if (x < 0)
-            x += Region.CHUNK_CORNER;
-        if (y < 0)
-            y += Region.CHUNK_CORNER;
-        if (z < 0)
-            z += Region.CHUNK_CORNER;
+        if (localChunkPosition.x < 0)
+            localChunkPosition.x += Region.CHUNK_CORNER;
+        if (localChunkPosition.y < 0)
+            localChunkPosition.y += Region.CHUNK_CORNER;
+        if (localChunkPosition.z < 0)
+            localChunkPosition.z += Region.CHUNK_CORNER;
 
         Region result = await regionLoader.LoadRegionAsync(regionPosition, cancellationToken);
 
@@ -54,14 +58,14 @@ public class FileSystemChunkLoader : IChunkLoader
         try
         {
             // 초기화 안 된 청크는 초기화 작업
-            if (!result[x, y, z].initialized)
-                worldGenerator.Modify(chunkPosition, result[x, y, z]);
+            if (!result[localChunkPosition].initialized)
+                worldGenerator.Modify(chunkPosition, result[localChunkPosition]);
 
             // 요청 세마포어 쌓이지 않게 제거
             requestSemaphores.Remove(chunkPosition, out var value);
 
             // 결과 반환
-            return result[x, y, z];
+            return result[localChunkPosition];
         }
         finally
         {

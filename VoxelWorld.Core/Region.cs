@@ -18,9 +18,9 @@ public class Region
     private readonly Chunk[] chunks;
     
 
-    public Chunk this[int x, int y, int z]
+    public Chunk this[Vector3Int position]
     {
-        get => chunks[LocalToIndex(new Vector3Int(x, y, z))];
+        get => chunks[LocalToIndex(position)];
     }
 
     public Region(bool clear = false)
