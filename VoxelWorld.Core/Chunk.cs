@@ -66,4 +66,22 @@ public class Chunk
             for (int i = 0; i < VOLUME; i++)
                 rawData[i] = (BlockType)binaryReader.ReadUInt16();
     }
+
+    public void Serialize(VoxelWorld.Core.Proto.Chunk chunk)
+    {
+        chunk.Initialized = initialized;
+
+        if (initialized)
+            for (int i = 0; i < VOLUME; i++)
+                chunk.RawData.Add((uint)rawData[i]);
+    }
+    
+    public void Deserialize(VoxelWorld.Core.Proto.Chunk chunk)
+    {
+        initialized = chunk.Initialized;
+
+        if (initialized)
+            for (int i = 0; i < VOLUME; i++)
+                rawData[i] = (BlockType)chunk.RawData[i];
+    }
 }
