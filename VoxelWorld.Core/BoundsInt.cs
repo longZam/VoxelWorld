@@ -2,19 +2,19 @@ namespace VoxelWorld.Core;
 
 
 
-public struct Bounds
+public struct BoundsInt
 {
     public Vector3Int min, max;
     public readonly Vector3Int Center => (max + min + Vector3Int.One) / 2;
 
 
-    public Bounds(Vector3Int min, Vector3Int max)
+    public BoundsInt(Vector3Int min, Vector3Int max)
     {
         this.min = min;
         this.max = max;
     }
 
-    public static bool Overlaps(Bounds a, Bounds b)
+    public static bool Overlaps(BoundsInt a, BoundsInt b)
     {
         // X 축에 대한 충돌 여부 확인
         if (a.max.x < b.min.x || a.min.x > b.max.x)

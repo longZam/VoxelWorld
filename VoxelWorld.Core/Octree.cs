@@ -25,9 +25,9 @@ public class Octree<T>
     public sealed class InternalNode : INode
     {
         public readonly INode?[] children;
-        public readonly Bounds bounds;
+        public readonly BoundsInt bounds;
 
-        public InternalNode(Bounds bounds)
+        public InternalNode(BoundsInt bounds)
         {
             this.children = ArrayPool<INode?>.Shared.Rent(8);
             this.bounds = bounds;
@@ -44,7 +44,7 @@ public class Octree<T>
     private readonly ReaderWriterLockSlim rwlock;
 
 
-    public Octree(Bounds bounds)
+    public Octree(BoundsInt bounds)
     {
         this.root = new InternalNode(bounds);
         this.rwlock = new ReaderWriterLockSlim();
@@ -71,7 +71,7 @@ public class Octree<T>
 
                     Vector3Int newChildSize = (current.bounds.max - current.bounds.min + Vector3Int.One) / 2;
                     Vector3Int newChildMin = GetChildMinFromOffset(offset, current.bounds.min, newChildSize);
-                    Bounds bounds = new Bounds(newChildMin, newChildMin + newChildSize);
+                    BoundsInt bounds = new BoundsInt(newChildMin, newChildMin + newChildSize);
                     InternalNode newChildInternalNode = new InternalNode(bounds);
                     int childLeafOffset = GetOffsetFromPositionalRelationship(newChildInternalNode.bounds.Center, childLeafNode.position);
                     newChildInternalNode.children[childLeafOffset] = childLeafNode;
@@ -214,7 +214,7 @@ public class Octree<T>
 
     }
     
-    public void OverlapCubeAll(Bounds bounds, List<LeafNode> results)
+    public void OverlapCubeAll(BoundsInt bounds, List<LeafNode> results)
     {
         rwlock.EnterReadLock();
 
@@ -229,10 +229,10 @@ public class Octree<T>
         }
     }
 
-    private static void OverlapCubeAll(InternalNode current, Bounds bounds, List<LeafNode> results)
+    private static void OverlapCubeAll(InternalNode current, BoundsInt bounds, List<LeafNode> results)
     {
         // 해당 internalNode가 쿼리 범위와 겹치지 않으면 자식 또한 겹치지 않으므로 제외 가능함
-        if (!Bounds.Overlaps(bounds, current.bounds))
+        if (!BoundsInt.Overlaps(bounds, current.bounds))
             return;
 
         for (int i = 0; i < 8; i++)
@@ -245,12 +245,12 @@ public class Octree<T>
             else if (child is InternalNode childInternalNode)
                 OverlapCubeAll(childInternalNode, bounds, results);
             else if (child is LeafNode childLeafNode)
-                if (Bounds.Overlaps(bounds, new(childLeafNode.position, childLeafNode.position)))
+                if (BoundsInt.Overlaps(bounds, new(childLeafNode.position, childLeafNode.position)))
                     results.Add(childLeafNode);
         }
     }
 
-    public void OverlapCubesAllComplement(IReadOnlyList<Bounds> bounds, List<LeafNode> results)
+    public void OverlapCubesAllComplement(IReadOnlyList<BoundsInt> bounds, List<LeafNode> results)
     {
         rwlock.EnterReadLock();
 
@@ -265,12 +265,12 @@ public class Octree<T>
         }
     }
 
-    private static void OverlapCubesAllComplement(InternalNode current, IReadOnlyList<Bounds> bounds, List<LeafNode> results)
+    private static void OverlapCubesAllComplement(InternalNode current, IReadOnlyList<BoundsInt> bounds, List<LeafNode> results)
     {
-        static bool HasCollidedOnce(Bounds target, IReadOnlyList<Bounds> bounds)
+        static bool HasCollidedOnce(BoundsInt target, IReadOnlyList<BoundsInt> bounds)
         {
             for (int i = 0; i < bounds.Count; i++)
-                if (Bounds.Overlaps(target, bounds[i]))
+                if (BoundsInt.Overlaps(target, bounds[i]))
                     return true;
             
             return false;
