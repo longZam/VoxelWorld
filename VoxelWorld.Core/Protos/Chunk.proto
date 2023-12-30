@@ -3,10 +3,29 @@ syntax = "proto3";
 package VoxelWorld.Core.Proto;
 
 
-message Chunk
+message Vec3Int
+{
+    int32 x = 1;
+    int32 y = 2;
+    int32 z = 3;
+}
+
+message LoadChunkRequest
+{
+    Vec3Int chunkPosition = 1;
+}
+
+message LoadChunkResponse
 {
     // 청크 초기화 여부
     bool initialized = 1;
     // 청크 블록 데이터. 부호없는 16비트 정수, uint16으로 변환하여 사용하십시오.
     repeated uint32 rawData = 2 [packed = true];
+    // 청크 위치
+    Vec3Int chunkPosition = 3;
+}
+
+service ChunkLoader
+{
+    rpc LoadChunk (LoadChunkRequest) returns (LoadChunkResponse);
 }

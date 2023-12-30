@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using VoxelWorld.Core.Proto;
 
 namespace VoxelWorld.Core;
 
@@ -68,21 +69,21 @@ public class Chunk
                 rawData[i] = (BlockType)binaryReader.ReadUInt16();
     }
 
-    public void Serialize(VoxelWorld.Core.Proto.Chunk chunk)
+    public void Serialize(LoadChunkResponse response)
     {
-        chunk.Initialized = initialized;
+        response.Initialized = initialized;
 
         if (initialized)
             for (int i = 0; i < VOLUME; i++)
-                chunk.RawData.Add((uint)rawData[i]);
+                response.RawData.Add((uint)rawData[i]);
     }
     
-    public void Deserialize(VoxelWorld.Core.Proto.Chunk chunk)
+    public void Deserialize(LoadChunkResponse response)
     {
-        initialized = chunk.Initialized;
+        initialized = response.Initialized;
 
         if (initialized)
             for (int i = 0; i < VOLUME; i++)
-                rawData[i] = (BlockType)chunk.RawData[i];
+                rawData[i] = (BlockType)response.RawData[i];
     }
 }

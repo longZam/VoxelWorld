@@ -18,6 +18,21 @@ public struct Vector3Int
         this.z = z;
     }
 
+    public static implicit operator Proto.Vec3Int(Vector3Int v)
+    {
+        return new()
+        {
+            X = v.x,
+            Y = v.y,
+            Z = v.z
+        };
+    }
+
+    public static implicit operator Vector3Int(Proto.Vec3Int v)
+    {
+        return new(v.X, v.Y, v.Z);
+    }
+
     public static Vector3Int operator +(Vector3Int v, Vector3Int w)
     {
         return new(v.x + w.x, v.y + w.y, v.z + w.z);
