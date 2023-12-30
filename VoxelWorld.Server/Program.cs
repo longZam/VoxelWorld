@@ -1,42 +1,37 @@
-// See https://aka.ms/new-console-template for more information
 using System.Diagnostics;
-using System.IO.Compression;
 using VoxelWorld.Core;
+using VoxelWorld.Core.Proto;
 using VoxelWorld.Core.WorldLoaders;
+using VoxelWorld.Server.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Additional configuration is required to successfully run gRPC on macOS.
+// For instructions on how to configure Kestrel and gRPC clients on macOS, visit https://go.microsoft.com/fwlink/?linkid=2099682
 
 string worldPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "world");
-WorldGenerator worldGenerator = new WorldGenerator(0);
-worldGenerator.modifiers.Add(0, (previousBlock, noiseGenerator, x, y, z) =>
+FileSystemRegionLoader regionLoader = new(worldPath);
+WorldGenerator generator = new WorldGenerator(0);
+
+generator.modifiers.Add(0, (prev, noise, worldPosition) =>
 {
-    if (z > 80)
+    if (worldPosition.z > 80)
         return BlockType.Air;
-    return noiseGenerator.Noise3D(x, y, z, 16, 16, 16, 1) > 0.5f ? BlockType.Grass : BlockType.Air;
+    return noise.Noise3D(worldPosition.x, worldPosition.y, worldPosition.z, 16, 16, 16, 1) > 0.5f ? BlockType.Grass : BlockType.Air;
 });
+FileSystemChunkLoader chunkLoader = new(regionLoader, generator);
 
-FileSystemRegionLoader regionLoader = new FileSystemRegionLoader(worldPath);
-FileSystemChunkLoader chunkLoader = new FileSystemChunkLoader(regionLoader, worldGenerator);
-World world = new World(chunkLoader);
+// Add services to the container.
+builder.Services.AddGrpc();
+builder.Services.AddScoped<World>();
+builder.Services.AddScoped<IChunkLoader, FileSystemChunkLoader>(provider => chunkLoader);
+builder.Services.AddScoped(provider => regionLoader);
+var app = builder.Build();
 
-List<Task<Chunk>> tasks = new List<Task<Chunk>>();
+// Configure the HTTP request pipeline.
+app.MapGrpcService<ChunkLoaderService>();
 
-Console.Write("스폰 청크 로딩 중... ");
-int size = 64;
-
-Stopwatch stopwatch = Stopwatch.StartNew();
-for (int z = 0; z < 32; z++)
-    for (int y = -size; y < size; y++)
-        for (int x = -size; x < size; x++)
-            tasks.Add(world.LoadChunkAsync(new Vector3Int(x, y, z)));
-
-await Task.WhenAll(tasks);
-stopwatch.Stop();
-
-Console.WriteLine("완료!");
-Console.WriteLine($"{stopwatch.ElapsedMilliseconds} ms");
-
-Console.Write("청크 저장 중... ");
-stopwatch.Restart();
+app.Run();
+Console.Write("서버 저장 중... ");
 await regionLoader.Save();
-stopwatch.Stop();
-Console.WriteLine("완료!");
-Console.WriteLine($"{stopwatch.ElapsedMilliseconds} ms");
+Console.WriteLine("서버 저장 완료");

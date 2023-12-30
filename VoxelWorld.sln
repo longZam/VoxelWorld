@@ -5,7 +5,9 @@ VisualStudioVersion = 17.0.31903.59
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoxelWorld.Core", "VoxelWorld.Core\VoxelWorld.Core.csproj", "{8AD2F5AE-848F-480F-932A-6B273950C941}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoxelWorld.Server", "VoxelWorld.Server\VoxelWorld.Server.csproj", "{059409C5-E8D4-41B6-B947-0132BB031F30}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoxelWorld.Server", "VoxelWorld.Server\VoxelWorld.Server.csproj", "{4E2C3D78-2099-43F1-B616-A28B229782DB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "VoxelWorld.Client", "VoxelWorld.Client\VoxelWorld.Client.csproj", "{39E4C4C4-B37A-46C5-8729-A6398D42DF72}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -20,9 +22,13 @@ Global
 		{8AD2F5AE-848F-480F-932A-6B273950C941}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8AD2F5AE-848F-480F-932A-6B273950C941}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8AD2F5AE-848F-480F-932A-6B273950C941}.Release|Any CPU.Build.0 = Release|Any CPU
-		{059409C5-E8D4-41B6-B947-0132BB031F30}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{059409C5-E8D4-41B6-B947-0132BB031F30}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{059409C5-E8D4-41B6-B947-0132BB031F30}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{059409C5-E8D4-41B6-B947-0132BB031F30}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4E2C3D78-2099-43F1-B616-A28B229782DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4E2C3D78-2099-43F1-B616-A28B229782DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4E2C3D78-2099-43F1-B616-A28B229782DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4E2C3D78-2099-43F1-B616-A28B229782DB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{39E4C4C4-B37A-46C5-8729-A6398D42DF72}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{39E4C4C4-B37A-46C5-8729-A6398D42DF72}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{39E4C4C4-B37A-46C5-8729-A6398D42DF72}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{39E4C4C4-B37A-46C5-8729-A6398D42DF72}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
