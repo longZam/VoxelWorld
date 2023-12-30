@@ -69,7 +69,7 @@ public class Octree<T>
                     if (childLeafNode.position == position)
                         throw new ArgumentException($"Item with same key has already been added");
 
-                    Vector3Int newChildSize = (current.bounds.max - current.bounds.min) / 2;
+                    Vector3Int newChildSize = (current.bounds.max - current.bounds.min + Vector3Int.One) / 2;
                     Vector3Int newChildMin = GetChildMinFromOffset(offset, current.bounds.min, newChildSize);
                     Bounds bounds = new Bounds(newChildMin, newChildMin + newChildSize);
                     InternalNode newChildInternalNode = new InternalNode(bounds);

@@ -5,7 +5,7 @@ namespace VoxelWorld.Core;
 public struct Bounds
 {
     public Vector3Int min, max;
-    public readonly Vector3Int Center => (max + min) / 2;
+    public readonly Vector3Int Center => (max + min + Vector3Int.One) / 2;
 
 
     public Bounds(Vector3Int min, Vector3Int max)
