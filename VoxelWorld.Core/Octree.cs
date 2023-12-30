@@ -25,14 +25,12 @@ public class Octree<T>
     public sealed class InternalNode : INode
     {
         public readonly INode?[] children;
-        public readonly Vector3Int min, max, center;
+        public readonly Bounds bounds;
 
-        public InternalNode(Vector3Int min, Vector3Int max)
+        public InternalNode(Bounds bounds)
         {
-            children = ArrayPool<INode?>.Shared.Rent(8);
-            this.min = min;
-            this.max = max;
-            this.center = (max + min + Vector3Int.One) / 2;
+            this.children = ArrayPool<INode?>.Shared.Rent(8);
+            this.bounds = bounds;
         }
 
         ~InternalNode()
@@ -46,9 +44,9 @@ public class Octree<T>
     private readonly ReaderWriterLockSlim rwlock;
 
 
-    public Octree(Vector3Int min, Vector3Int max)
+    public Octree(Bounds bounds)
     {
-        this.root = new InternalNode(min, max);
+        this.root = new InternalNode(bounds);
         this.rwlock = new ReaderWriterLockSlim();
     }
 
@@ -63,7 +61,7 @@ public class Octree<T>
 
             while (true)
             {
-                int offset = GetOffsetFromPositionalRelationship(current.center, position);
+                int offset = GetOffsetFromPositionalRelationship(current.bounds.Center, position);
                 INode? child = current.children[offset];
 
                 if (child is LeafNode childLeafNode)
@@ -71,11 +69,11 @@ public class Octree<T>
                     if (childLeafNode.position == position)
                         throw new ArgumentException($"Item with same key has already been added");
 
-                    Vector3Int newChildSize = (current.max - current.min + Vector3Int.One) / 2; // 여기서 문제?
-                    Vector3Int newChildMin = GetChildMinFromOffset(offset, current.min, newChildSize);
-
-                    InternalNode newChildInternalNode = new InternalNode(newChildMin, newChildMin + newChildSize);
-                    int childLeafOffset = GetOffsetFromPositionalRelationship(newChildInternalNode.center, childLeafNode.position);
+                    Vector3Int newChildSize = (current.bounds.max - current.bounds.min) / 2;
+                    Vector3Int newChildMin = GetChildMinFromOffset(offset, current.bounds.min, newChildSize);
+                    Bounds bounds = new Bounds(newChildMin, newChildMin + newChildSize);
+                    InternalNode newChildInternalNode = new InternalNode(bounds);
+                    int childLeafOffset = GetOffsetFromPositionalRelationship(newChildInternalNode.bounds.Center, childLeafNode.position);
                     newChildInternalNode.children[childLeafOffset] = childLeafNode;
                     current.children[offset] = newChildInternalNode;
                     current = newChildInternalNode;
@@ -114,7 +112,7 @@ public class Octree<T>
 
     private bool Remove(InternalNode parent, Vector3Int position)
     {
-        int offset = GetOffsetFromPositionalRelationship(parent.center, position);
+        int offset = GetOffsetFromPositionalRelationship(parent.bounds.Center, position);
 
         INode? child = parent.children[offset];
 
@@ -187,7 +185,7 @@ public class Octree<T>
 
             while (true)
             {
-                int offset = GetOffsetFromPositionalRelationship(current.center, position);
+                int offset = GetOffsetFromPositionalRelationship(current.bounds.Center, position);
                 var child = current.children[offset];
 
                 if (child is InternalNode childInternalNode)
@@ -216,15 +214,14 @@ public class Octree<T>
 
     }
     
-    public void OverlapCubeAll(Vector3Int min, Vector3Int max, List<LeafNode> results)
+    public void OverlapCubeAll(Bounds bounds, List<LeafNode> results)
     {
-        results.Clear();
-
         rwlock.EnterReadLock();
 
         try
         {
-            OverlapCubeAll(root, min, max, results);
+            results.Clear();
+            OverlapCubeAll(root, bounds, results);
         }
         finally
         {
@@ -232,10 +229,10 @@ public class Octree<T>
         }
     }
 
-    private static void OverlapCubeAll(InternalNode current, Vector3Int min, Vector3Int max, List<LeafNode> results)
+    private static void OverlapCubeAll(InternalNode current, Bounds bounds, List<LeafNode> results)
     {
         // 해당 internalNode가 쿼리 범위와 겹치지 않으면 자식 또한 겹치지 않으므로 제외 가능함
-        if (!CollisionCheck(min, max, current.min, current.max))
+        if (!Bounds.Overlaps(bounds, current.bounds))
             return;
 
         for (int i = 0; i < 8; i++)
@@ -246,30 +243,58 @@ public class Octree<T>
                 continue;
             // 자식 internalNode에 재귀적으로 수행
             else if (child is InternalNode childInternalNode)
-                OverlapCubeAll(childInternalNode, min, max, results);
+                OverlapCubeAll(childInternalNode, bounds, results);
             else if (child is LeafNode childLeafNode)
-                if (CollisionCheck(min, max, childLeafNode.position, childLeafNode.position))
+                if (Bounds.Overlaps(bounds, new(childLeafNode.position, childLeafNode.position)))
                     results.Add(childLeafNode);
         }
     }
 
-    public static bool CollisionCheck(Vector3Int aMin, Vector3Int aMax, Vector3Int bMin, Vector3Int bMax)
+    public void OverlapCubesAllComplement(IReadOnlyList<Bounds> bounds, List<LeafNode> results)
     {
-        // X 축에 대한 충돌 여부 확인
-        if (aMax.x < bMin.x || aMin.x > bMax.x)
-            return false;
+        rwlock.EnterReadLock();
 
-        // Y 축에 대한 충돌 여부 확인
-        if (aMax.y < bMin.y || aMin.y > bMax.y)
-            return false;
-
-        // Z 축에 대한 충돌 여부 확인
-        if (aMax.z < bMin.z || aMin.z > bMax.z)
-            return false;
-
-        return true;
+        try
+        {
+            results.Clear();
+            OverlapCubesAllComplement(root, bounds, results);
+        }
+        finally
+        {
+            rwlock.ExitReadLock();
+        }
     }
 
+    private static void OverlapCubesAllComplement(InternalNode current, IReadOnlyList<Bounds> bounds, List<LeafNode> results)
+    {
+        static bool HasCollidedOnce(Bounds target, IReadOnlyList<Bounds> bounds)
+        {
+            for (int i = 0; i < bounds.Count; i++)
+                if (Bounds.Overlaps(target, bounds[i]))
+                    return true;
+            
+            return false;
+        }
+
+        // 한 번이라도 닿은 대상은 무시
+        if (HasCollidedOnce(current.bounds, bounds))
+            return;
+
+        for (int i = 0; i < 8; i++)
+        {
+            var child = current.children[i];
+            
+            if (child == null)
+                continue;
+            // 자식 internalNode에 재귀적으로 수행
+            else if (child is InternalNode childInternalNode)
+                OverlapCubesAllComplement(childInternalNode, bounds, results);
+            // 한 번도 안 닿았으면 추가
+            else if (child is LeafNode childLeafNode)
+                if (!HasCollidedOnce(new(childLeafNode.position, childLeafNode.position), bounds))
+                    results.Add(childLeafNode);
+        }
+    }
 
     private static Vector3Int GetChildMinFromOffset(int offset, Vector3Int parentMin, Vector3Int childSize)
     {

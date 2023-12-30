@@ -15,7 +15,7 @@ public class FileSystemRegionLoader : IRegionLoader
     public FileSystemRegionLoader(string directoryPath)
     {
         this.directoryPath = directoryPath;
-        this.regionTree = new Octree<Region>(Vector3Int.Min / Region.BLOCK_CORNER, Vector3Int.Max / Region.BLOCK_CORNER);
+        this.regionTree = new Octree<Region>(new(Vector3Int.Min / Region.BLOCK_CORNER, Vector3Int.Max / Region.BLOCK_CORNER));
         this.requestSemaphores = new ConcurrentDictionary<Vector2Int, SemaphoreSlim>();
     }
 

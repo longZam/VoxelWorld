@@ -14,7 +14,7 @@ public class World
     public World(IChunkLoader chunkLoader)
     {
         this.chunkLoader = chunkLoader;
-        this.chunkTree = new Octree<Chunk>(Vector3Int.Min / Chunk.CORNER, Vector3Int.Max / Chunk.CORNER);
+        this.chunkTree = new Octree<Chunk>(new(Vector3Int.Min / Chunk.CORNER, Vector3Int.Max / Chunk.CORNER));
         this.requestSemaphores = new ConcurrentDictionary<Vector3Int, SemaphoreSlim>();
     }
     
