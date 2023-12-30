@@ -23,9 +23,9 @@ FileSystemChunkLoader chunkLoader = new(regionLoader, generator);
 
 // Add services to the container.
 builder.Services.AddGrpc();
-builder.Services.AddScoped<World>();
-builder.Services.AddScoped<IChunkLoader, FileSystemChunkLoader>(provider => chunkLoader);
-builder.Services.AddScoped(provider => regionLoader);
+builder.Services.AddSingleton<World>();
+builder.Services.AddSingleton<IChunkLoader, FileSystemChunkLoader>(provider => chunkLoader);
+builder.Services.AddSingleton(provider => regionLoader);
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
