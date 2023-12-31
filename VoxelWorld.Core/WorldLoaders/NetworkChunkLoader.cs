@@ -10,16 +10,20 @@ namespace VoxelWorld.Core;
 public class NetworkChunkLoader : IChunkLoader
 {
     private readonly ChunkLoader.ChunkLoaderClient chunkLoaderClient;
+    private readonly Metadata? headers;
 
 
-    public NetworkChunkLoader(ChunkLoader.ChunkLoaderClient chunkLoaderClient)
+    public NetworkChunkLoader(ChunkLoader.ChunkLoaderClient chunkLoaderClient, Metadata? headers = null)
     {
         this.chunkLoaderClient = chunkLoaderClient;
+        this.headers = headers;
     }
 
     public async Task<Chunk> LoadChunkAsync(Vector3Int chunkPosition, CancellationToken cancellationToken = default)
     {
-        var response = await chunkLoaderClient.LoadChunkAsync(new() { ChunkPosition = chunkPosition }, cancellationToken: cancellationToken);
+        var response = await chunkLoaderClient.LoadChunkAsync(new() { ChunkPosition = chunkPosition },
+                                                            headers: headers,
+                                                            cancellationToken: cancellationToken);
 
         return await Task.Run(() =>
         {
