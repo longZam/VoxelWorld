@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Grpc.Core;
 using VoxelWorld.Core;
 using VoxelWorld.Core.Proto;
 using VoxelWorld.Core.WorldLoaders;
@@ -22,7 +23,11 @@ generator.modifiers.Add(0, (prev, noise, worldPosition) =>
 FileSystemChunkLoader chunkLoader = new(regionLoader, generator);
 
 // Add services to the container.
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(options =>
+{
+    options.ResponseCompressionLevel = System.IO.Compression.CompressionLevel.Optimal;
+    options.ResponseCompressionAlgorithm = "gzip";
+});
 builder.Services.AddSingleton<World>();
 builder.Services.AddSingleton<IChunkLoader, FileSystemChunkLoader>(provider => chunkLoader);
 builder.Services.AddSingleton(provider => regionLoader);
