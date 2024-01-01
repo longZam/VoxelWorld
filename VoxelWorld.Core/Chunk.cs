@@ -12,11 +12,11 @@ public class Chunk
     public const int SIDE = CORNER * CORNER;
     public const int VOLUME = CORNER * CORNER * CORNER;
 
-    private readonly BlockType[] rawData;
+    private readonly ushort[] rawData;
     public bool initialized;
 
 
-    public BlockType this[Vector3Int position]
+    public ushort this[Vector3Int position]
     {
         get
         {
@@ -40,7 +40,7 @@ public class Chunk
 
     public Chunk(bool clear = false)
     {
-        this.rawData = ArrayPool<BlockType>.Shared.Rent(CORNER * CORNER * CORNER);
+        this.rawData = ArrayPool<ushort>.Shared.Rent(CORNER * CORNER * CORNER);
         
         if (clear)
             Array.Clear(this.rawData, 0, VOLUME);
@@ -48,7 +48,7 @@ public class Chunk
 
     ~Chunk()
     {
-        ArrayPool<BlockType>.Shared.Return(this.rawData);
+        ArrayPool<ushort>.Shared.Return(this.rawData);
     }
 
     public void Serialize(BinaryWriter binaryWriter)
@@ -57,7 +57,7 @@ public class Chunk
 
         if (initialized)
             for (int i = 0; i < VOLUME; i++)
-                binaryWriter.Write((ushort)rawData[i]);
+                binaryWriter.Write(rawData[i]);
     }
 
     public void Deserialize(BinaryReader binaryReader)
@@ -66,7 +66,7 @@ public class Chunk
 
         if (initialized)
             for (int i = 0; i < VOLUME; i++)
-                rawData[i] = (BlockType)binaryReader.ReadUInt16();
+                rawData[i] = binaryReader.ReadUInt16();
     }
 
     public void Serialize(LoadChunkResponse response)
@@ -75,7 +75,7 @@ public class Chunk
 
         if (initialized)
             for (int i = 0; i < VOLUME; i++)
-                response.RawData.Add((uint)rawData[i]);
+                response.RawData.Add(rawData[i]);
     }
     
     public void Deserialize(LoadChunkResponse response)
@@ -84,6 +84,6 @@ public class Chunk
 
         if (initialized)
             for (int i = 0; i < VOLUME; i++)
-                rawData[i] = (BlockType)response.RawData[i];
+                rawData[i] = (ushort)response.RawData[i];
     }
 }
