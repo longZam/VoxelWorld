@@ -6,7 +6,12 @@ namespace VoxelWorld.Core;
 
 
 /// <summary>
+/// <para>
 /// (16, 16, 512) 블록 크기의 데이터를 관리하는 클래스
+/// </para>
+/// <para>
+/// Chunk의 모든 공용 및 보호된 멤버는 스레드로부터 안전하며 여러 스레드에서 동시에 사용할 수 있습니다.
+/// </para>
 /// </summary>
 public class Chunk
 {
@@ -165,6 +170,10 @@ public class Chunk
     public delegate void ParallelReadAction(in Vector3Int position, in ushort block);
     public delegate void ParallelWriteAction(in Vector3Int position, ref ushort block);
 
+    /// <summary>
+    /// 청크 내 모든 블럭에 읽기 작업을 병렬로 수행합니다.
+    /// </summary>
+    /// <param name="action"></param>
     public void ParallelRead(ParallelReadAction action)
     {
         rwlock.EnterReadLock();
@@ -182,6 +191,10 @@ public class Chunk
         }
     }
 
+    /// <summary>
+    /// 청크 내 모든 블럭에 쓰기 작업을 병렬로 수행합니다.
+    /// </summary>
+    /// <param name="action"></param>
     public void ParallelWrite(ParallelWriteAction action)
     {
         rwlock.EnterWriteLock();
