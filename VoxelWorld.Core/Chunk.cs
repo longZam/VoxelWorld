@@ -173,7 +173,7 @@ public class Chunk
         {
             Parallel.For(0, VOLUME, i =>
             {
-                action(IndexToLocalPosition(i), in rawData[i]);
+                action(IndexToLocalPosition(in i), in rawData[i]);
             });
         }
         finally
@@ -190,7 +190,7 @@ public class Chunk
         {
             Parallel.For(0, VOLUME, i =>
             {
-                action(IndexToLocalPosition(i), ref rawData[i]);
+                action(IndexToLocalPosition(in i), ref rawData[i]);
             });
         }
         finally
