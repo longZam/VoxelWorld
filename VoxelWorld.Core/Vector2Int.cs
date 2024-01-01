@@ -2,6 +2,12 @@ namespace VoxelWorld.Core;
 
 public struct Vector2Int
 {
+    public static readonly Vector2Int Zero = new Vector2Int(0, 0);
+    public static readonly Vector2Int One = new Vector2Int(1, 1);
+    public static readonly Vector2Int Max = new Vector2Int(int.MaxValue, int.MaxValue);
+    public static readonly Vector2Int Min = new Vector2Int(int.MinValue, int.MinValue);
+
+
     public int x, y;
 
 
