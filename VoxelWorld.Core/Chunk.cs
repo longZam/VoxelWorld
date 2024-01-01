@@ -14,7 +14,6 @@ public class Chunk
 
     private readonly ushort[] rawData;
     private readonly ReaderWriterLockSlim rwlock;
-    private bool initialized;
 
 
     /// <summary>
@@ -77,10 +76,7 @@ public class Chunk
 
         try
         {
-            binaryWriter.Write(initialized);
-
-            if (initialized)
-                for (int i = 0; i < VOLUME; i++)
+            for (int i = 0; i < VOLUME; i++)
                     binaryWriter.Write(rawData[i]);
         }
         finally
@@ -95,11 +91,8 @@ public class Chunk
 
         try
         {
-            initialized = binaryReader.ReadBoolean();
-
-            if (initialized)
-                for (int i = 0; i < VOLUME; i++)
-                    rawData[i] = binaryReader.ReadUInt16();
+            for (int i = 0; i < VOLUME; i++)
+                rawData[i] = binaryReader.ReadUInt16();
         }
         finally
         {
@@ -113,11 +106,8 @@ public class Chunk
 
         try
         {
-            response.Initialized = initialized;
-
-            if (initialized)
-                for (int i = 0; i < VOLUME; i++)
-                    response.RawData.Add(rawData[i]);
+            for (int i = 0; i < VOLUME; i++)
+                response.RawData.Add(rawData[i]);
         }
         finally
         {
@@ -131,11 +121,8 @@ public class Chunk
 
         try
         {
-            initialized = response.Initialized;
-
-            if (initialized)
-                for (int i = 0; i < VOLUME; i++)
-                    rawData[i] = (ushort)response.RawData[i];
+            for (int i = 0; i < VOLUME; i++)
+                rawData[i] = (ushort)response.RawData[i];
         }
         finally
         {
