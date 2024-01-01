@@ -5,12 +5,27 @@ using VoxelWorld.Core.Proto;
 namespace VoxelWorld.Core;
 
 
+/// <summary>
+/// (16, 16, 512) 블록 크기의 데이터를 관리하는 클래스
+/// </summary>
 public class Chunk
 {
-    public const int CORNER_BIT = 4;
-    public const int CORNER = CORNER_BIT * CORNER_BIT;
-    public const int SIDE = CORNER * CORNER;
-    public const int VOLUME = CORNER * CORNER * CORNER;
+    /// <summary>
+    /// 한 청크 당 X축, Y축 블록 개수
+    /// </summary>
+    public const int WIDTH = 16;
+    /// <summary>
+    /// 한 청크 당 Z축 블록 개수
+    /// </summary>
+    public const int HEIGHT = 512;
+    /// <summary>
+    /// 한 청크 당 밑면의 블록 개수
+    /// </summary>
+    public const int BOTTOM = WIDTH * HEIGHT;
+    /// <summary>
+    /// 한 청크 당 블록 개수
+    /// </summary>
+    public const int VOLUME = BOTTOM * HEIGHT;
 
     private readonly ushort[] rawData;
     private readonly ReaderWriterLockSlim rwlock;
@@ -58,7 +73,7 @@ public class Chunk
 
     public Chunk(bool clear = false)
     {
-        this.rawData = ArrayPool<ushort>.Shared.Rent(CORNER * CORNER * CORNER);
+        this.rawData = ArrayPool<ushort>.Shared.Rent(VOLUME);
         this.rwlock = new();
 
         if (clear)
@@ -186,11 +201,11 @@ public class Chunk
 
     private static int LocalPositionToIndex(in Vector3Int localPosition)
     {
-        Debug.Assert(0 <= localPosition.x && localPosition.x < CORNER, $"x must be 0 <= x < {CORNER}, x = {localPosition.x}");
-        Debug.Assert(0 <= localPosition.y && localPosition.y < CORNER, $"y must be 0 <= y < {CORNER}, y = {localPosition.y}");
-        Debug.Assert(0 <= localPosition.z && localPosition.z < CORNER, $"z must be 0 <= z < {CORNER}, z = {localPosition.z}");
+        Debug.Assert(0 <= localPosition.x && localPosition.x < WIDTH, $"x must be 0 <= x < {WIDTH}, x = {localPosition.x}");
+        Debug.Assert(0 <= localPosition.y && localPosition.y < WIDTH, $"y must be 0 <= y < {WIDTH}, y = {localPosition.y}");
+        Debug.Assert(0 <= localPosition.z && localPosition.z < HEIGHT, $"z must be 0 <= z < {HEIGHT}, z = {localPosition.z}");
 
-        return localPosition.x + CORNER * localPosition.y + SIDE * localPosition.z;
+        return localPosition.x + WIDTH * localPosition.y + BOTTOM * localPosition.z;
     }
 
     private static Vector3Int IndexToLocalPosition(in int index)
@@ -198,9 +213,9 @@ public class Chunk
         Debug.Assert(0 <= index && index < VOLUME, $"index must be 0 <= index < {VOLUME}, index = {index}");
 
         return new(
-            index % CORNER,
-            index / CORNER % CORNER,
-            index / SIDE % CORNER
+            index % WIDTH,
+            index / WIDTH % WIDTH,
+            index / BOTTOM % HEIGHT
         );
     }
 }
