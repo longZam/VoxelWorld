@@ -4,74 +4,121 @@ using System.Diagnostics;
 namespace VoxelWorld.Core;
 
 
-// world의 최소 파일 단위인 .region의 클래스
+/// <summary>
+/// <para>
+/// World의 파일 시스템 최소 저장 단위 .region
+/// </para>
+/// <para>
+/// Region의 모든 공용 및 보호된 멤버는 스레드로부터 안전하며 여러 스레드에서 동시에 사용할 수 있습니다.
+/// </para>
+/// </summary>
 public class Region
 {
-    public const int CHUNK_CORNER_BIT = 4;
-    public const int CHUNK_CORNER = CHUNK_CORNER_BIT * CHUNK_CORNER_BIT;
-    public const int CHUNK_SIDE = CHUNK_CORNER * CHUNK_CORNER;
-    public const int CHUNK_VOLUME = CHUNK_CORNER * CHUNK_CORNER * CHUNK_CORNER;
-    public const int BLOCK_CORNER = CHUNK_CORNER * Chunk.CORNER;
-    public const int BLOCK_SIDE = CHUNK_SIDE * Chunk.SIDE;
-    public const int BLOCK_VOLUME = CHUNK_VOLUME * Chunk.VOLUME;
+    /// <summary>
+    /// 한 Region 당 X축, Y축 청크 개수
+    /// </summary>
+    public const int WIDTH = 64;
+
 
     private readonly Chunk[] chunks;
-    
+    private readonly bool[] initialized;
+    private readonly ReaderWriterLockSlim rwlock;
 
-    public Chunk this[Vector3Int position]
+
+    /// <summary>
+    /// 해당 LocalPosition의 Chunk를 읽습니다.
+    /// </summary>
+    public Chunk this[in Vector2Int localPosition]
     {
-        get => chunks[LocalToIndex(position)];
+        get
+        {
+            rwlock.EnterReadLock();
+
+            try
+            {
+                return chunks[LocalPositionToIndex(in localPosition)];
+            }
+            finally
+            {
+                rwlock.ExitReadLock();
+            }
+        }
     }
 
     public Region(bool clear = false)
     {
-        this.chunks = ArrayPool<Chunk>.Shared.Rent(CHUNK_VOLUME);
+        this.chunks = ArrayPool<Chunk>.Shared.Rent(WIDTH * WIDTH);
+        this.initialized = ArrayPool<bool>.Shared.Rent(WIDTH * WIDTH);
+        this.rwlock = new();
 
-        for (int i = 0; i < CHUNK_VOLUME; i++)
+        for (int i = 0; i < WIDTH * WIDTH; i++)
             this.chunks[i] = new Chunk(clear);
+        
+        if (clear)
+            Array.Fill(this.initialized, false);
     }
 
     ~Region()
     {
         ArrayPool<Chunk>.Shared.Return(chunks, true);
+        ArrayPool<bool>.Shared.Return(initialized, false);
     }
 
     public void Serialize(BinaryWriter binaryWriter)
     {
-        for (int i = 0; i < CHUNK_VOLUME; i++)
+        rwlock.EnterReadLock();
+
+        try
+        {   
+            for (int i = 0; i < WIDTH * WIDTH; i++)
+            {
+                binaryWriter.Write(initialized[i]);
+
+                if (initialized[i])
+                    chunks[i].Serialize(binaryWriter);
+            }
+        }
+        finally
         {
-            chunks[i].Serialize(binaryWriter);
+            rwlock.ExitReadLock();
         }
     }
 
     public void Deserialize(BinaryReader binaryReader)
     {
-        for (int i = 0; i < CHUNK_VOLUME; i++)
+        rwlock.EnterWriteLock();
+
+        try
         {
-            chunks[i].Deserialize(binaryReader);
+            for (int i = 0; i < WIDTH * WIDTH; i++)
+            {
+                initialized[i] = binaryReader.ReadBoolean();
+
+                if (initialized[i])
+                    chunks[i].Deserialize(binaryReader);
+            }
         }
-            
+        finally
+        {
+            rwlock.ExitWriteLock();
+        }   
     }
 
-    private static int LocalToIndex(Vector3Int chunkPosition)
+    private static int LocalPositionToIndex(in Vector2Int localPosition)
     {
-        Debug.Assert(0 <= chunkPosition.x && chunkPosition.x < CHUNK_CORNER, $"chunkPosition.x must be 0 <= chunkPosition.x < {CHUNK_CORNER}, chunkPosition.x = {chunkPosition.x}");
-        Debug.Assert(0 <= chunkPosition.y && chunkPosition.y < CHUNK_CORNER, $"chunkPosition.y must be 0 <= chunkPosition.y < {CHUNK_CORNER}, chunkPosition.y = {chunkPosition.y}");
-        Debug.Assert(0 <= chunkPosition.z && chunkPosition.z < CHUNK_CORNER, $"chunkPosition.z must be 0 <= chunkPosition.z < {CHUNK_CORNER}, chunkPosition.z = {chunkPosition.z}");
+        Debug.Assert(0 <= localPosition.x && localPosition.x < WIDTH, $"x must be 0 <= x < {WIDTH}, x = {localPosition.x}");
+        Debug.Assert(0 <= localPosition.y && localPosition.y < WIDTH, $"y must be 0 <= y < {WIDTH}, y = {localPosition.y}");
 
-        return chunkPosition.x + CHUNK_CORNER * chunkPosition.y + CHUNK_SIDE * chunkPosition.z;
+        return localPosition.x + WIDTH * localPosition.y;
     }
 
-    public static Vector3Int WorldToLocal(Vector3Int chunkPosition)
+    private static Vector2Int IndexToLocalPosition(in int index)
     {
-        Vector3Int localChunkPosition = new Vector3Int(chunkPosition.x % CHUNK_CORNER,
-                                                       chunkPosition.y % CHUNK_CORNER,
-                                                       chunkPosition.z % CHUNK_CORNER);
+        Debug.Assert(0 <= index && index < WIDTH * WIDTH, $"index must be 0 <= index < {WIDTH * WIDTH}, index = {index}");
 
-        if (localChunkPosition.x < 0) localChunkPosition.x += CHUNK_CORNER;
-        if (localChunkPosition.y < 0) localChunkPosition.y += CHUNK_CORNER;
-        if (localChunkPosition.z < 0) localChunkPosition.z += CHUNK_CORNER;
-    
-        return localChunkPosition;
+        return new(
+            index % WIDTH,
+            index / WIDTH % WIDTH
+        );
     }
 }
