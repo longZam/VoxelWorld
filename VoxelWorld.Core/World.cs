@@ -6,19 +6,21 @@ namespace VoxelWorld.Core;
 
 public class World
 {
+    public static readonly RectInt CHUNK_BOUNDARY = new(Vector2Int.Min / Chunk.WIDTH, Vector2Int.Max / Chunk.WIDTH);
+
     private readonly IChunkLoader chunkLoader;
-    private readonly Octree<Chunk> chunkTree;
-    private readonly ConcurrentDictionary<Vector3Int, SemaphoreSlim> requestSemaphores;
+    private readonly QuadTreeInteger<Chunk> chunkTree;
+    private readonly ConcurrentDictionary<Vector2Int, SemaphoreSlim> requestSemaphores;
 
 
     public World(IChunkLoader chunkLoader)
     {
         this.chunkLoader = chunkLoader;
-        this.chunkTree = new Octree<Chunk>(new(Vector3Int.Min / Chunk.CORNER, Vector3Int.Max / Chunk.CORNER));
-        this.requestSemaphores = new ConcurrentDictionary<Vector3Int, SemaphoreSlim>();
+        this.chunkTree = new QuadTreeInteger<Chunk>(in CHUNK_BOUNDARY);
+        this.requestSemaphores = new ConcurrentDictionary<Vector2Int, SemaphoreSlim>();
     }
     
-    public async Task<Chunk> LoadChunkAsync(Vector3Int position, CancellationToken cancellationToken = default)
+    public async Task<Chunk> LoadChunkAsync(Vector2Int position, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         
@@ -37,7 +39,7 @@ public class World
             result = await chunkLoader.LoadChunkAsync(position, cancellationToken);
 
             // 나중에 빠르게 접근하기 위한 캐싱
-            await Task.Run(() => chunkTree.Insert(position, result), cancellationToken);
+            await Task.Run(() => chunkTree.Insert(in position, result), cancellationToken);
 
             // 요청 세마포어 쌓이지 않게 제거
             requestSemaphores.Remove(position, out var value);
@@ -52,35 +54,44 @@ public class World
         }
     }
 
-    public static Vector2Int WorldToRegion(Vector3Int worldPosition)
+    public static Vector2Int WorldToRegion(in Vector3Int worldPosition)
     {
-        return ChunkToRegion(WorldToChunk(worldPosition));
+        // 음수 부호를 유지하기 위한 비트 시프트 연산
+        return new Vector2Int(worldPosition.x >> 9,
+                            worldPosition.y >> 9);
     }
 
-    public static Vector2Int ChunkToRegion(Vector3Int chunkPosition)
+    public static Vector2Int ChunkToRegion(in Vector2Int chunkPosition)
     {
-        return new Vector2Int(chunkPosition.x >> Region.CHUNK_CORNER_BIT,
-                            chunkPosition.y >> Region.CHUNK_CORNER_BIT);
+        // 음수 부호 유지하기 위한 비트 시프트 연산
+        return new Vector2Int(chunkPosition.x >> 5,
+                            chunkPosition.y >> 5);
     }
 
-    public static Vector3Int WorldToChunk(Vector3Int worldPosition)
+    public static Vector2Int WorldToChunk(in Vector3Int worldPosition)
     {
-        return new Vector3Int(worldPosition.x >> Chunk.CORNER_BIT,
-                            worldPosition.y >> Chunk.CORNER_BIT,
-                            worldPosition.z >> Chunk.CORNER_BIT);
+        // 음수 부호 유지하기 위한 비트 시프트 연산
+        return new Vector2Int(worldPosition.x >> 4,
+                            worldPosition.y >> 4);
     }
     
-    public static Vector3Int RegionToChunk(Vector2Int regionPosition)
+    public static Vector2Int RegionToChunk(in Vector2Int regionPosition)
     {
-        return new Vector3Int(regionPosition.x, regionPosition.y, 0) * Region.CHUNK_SIDE;
+        return Region.WIDTH * Chunk.WIDTH * regionPosition;
     }
 
-    public static Vector3Int ChunkToWorld(Vector3Int chunkPosition)
+    public static Vector3Int ChunkToWorld(in Vector2Int chunkPosition)
     {
-        return chunkPosition * Chunk.CORNER;
+        Vector2Int worldPosition = chunkPosition * Chunk.WIDTH;
+
+        return new(
+            worldPosition.x,
+            worldPosition.y,
+            0
+        );
     }
 
-    public static Vector3Int RegionToWorld(Vector2Int regionPosition)
+    public static Vector3Int RegionToWorld(in Vector2Int regionPosition)
     {
         return ChunkToWorld(RegionToChunk(regionPosition));
     }

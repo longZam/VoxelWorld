@@ -8,28 +8,31 @@ namespace VoxelWorld.Server.Services;
 
 public sealed partial class ChunkLoaderService : ChunkLoader.ChunkLoaderBase
 {
-    private readonly World world;
+    private readonly WorldLoader worldLoader;
 
 
-    public ChunkLoaderService(World world)
+    public ChunkLoaderService(WorldLoader worldLoader)
     {
-        this.world = world;
+        this.worldLoader = worldLoader;
     }
 
     public override async Task<LoadChunkResponse> LoadChunk(LoadChunkRequest request, ServerCallContext context)
     {
+        if (!RectInt.Overlaps(in World.CHUNK_BOUNDARY, request.ChunkPosition))
+            throw new RpcException(new(StatusCode.OutOfRange, "요청한 위치가 world의 범위를 벗어났습니다."));
+
+        var status = worldLoader.GetWorldsActivationStatus();
+
+        if (!status.TryGetValue(request.WorldName, out bool activation))
+            throw new RpcException(new(StatusCode.InvalidArgument, "요청한 world가 존재하지 않습니다."));
+        if (!activation)
+            throw new RpcException(new(StatusCode.FailedPrecondition, "요청한 world는 현재 활성 상태가 아닙니다."));
+
         LoadChunkResponse response = new();
 
-        try
-        {
-            Chunk chunk = await world.LoadChunkAsync(request.ChunkPosition, context.CancellationToken);
-            chunk.Serialize(response);
-            response.ChunkPosition = request.ChunkPosition;
-        }
-        catch (Exception e)
-        {
-            throw new RpcException(new Status(StatusCode.Unknown, e.Message));
-        }
+        World world = worldLoader.GetWorld(request.WorldName);
+        Chunk chunk = await world.LoadChunkAsync(request.ChunkPosition, context.CancellationToken);
+        chunk.Serialize(response);
 
         return response;
     }

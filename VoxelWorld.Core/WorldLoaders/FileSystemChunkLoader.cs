@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
-using VoxelWorld.Core.WorldLoaders;
 
-namespace VoxelWorld.Core;
+namespace VoxelWorld.Core.WorldLoaders;
 
 
 /// <summary>
@@ -10,45 +9,27 @@ namespace VoxelWorld.Core;
 public class FileSystemChunkLoader : IChunkLoader
 {
     private readonly FileSystemRegionLoader regionLoader;
-    private readonly WorldGenerator worldGenerator;
-    
+
     /// <summary>
     /// 같은 내용의 중복 요청으로 인한 충돌을 방지하는 세마포어
     /// </summary>
-    private readonly ConcurrentDictionary<Vector3Int, SemaphoreSlim> requestSemaphores;
+    private readonly ConcurrentDictionary<Vector2Int, SemaphoreSlim> requestSemaphores;
 
 
-    public FileSystemChunkLoader(FileSystemRegionLoader regionLoader, WorldGenerator worldGenerator)
+    public FileSystemChunkLoader(FileSystemRegionLoader regionLoader)
     {
         this.regionLoader = regionLoader;
-        this.worldGenerator = worldGenerator;
-        this.requestSemaphores = new ConcurrentDictionary<Vector3Int, SemaphoreSlim>();
+        this.requestSemaphores = new ConcurrentDictionary<Vector2Int, SemaphoreSlim>();
     }
 
-    public async Task<Chunk> LoadChunkAsync(Vector3Int chunkPosition, CancellationToken cancellationToken = default)
+    public async Task<Chunk> LoadChunkAsync(Vector2Int chunkPosition, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
         // 청크 위치로부터 region의 좌표를 계산
         Vector2Int regionPosition = World.ChunkToRegion(chunkPosition);
 
-        // region 내에서의 로컬 청크 좌표 계산
-        Vector3Int localChunkPosition = new()
-        {
-            x = chunkPosition.x % Region.CHUNK_CORNER,
-            y = chunkPosition.y % Region.CHUNK_CORNER,
-            z = chunkPosition.z % Region.CHUNK_CORNER
-        };
-
-        // 음수에 대한 로컬 좌표 처리
-        if (localChunkPosition.x < 0)
-            localChunkPosition.x += Region.CHUNK_CORNER;
-        if (localChunkPosition.y < 0)
-            localChunkPosition.y += Region.CHUNK_CORNER;
-        if (localChunkPosition.z < 0)
-            localChunkPosition.z += Region.CHUNK_CORNER;
-
-        Region result = await regionLoader.LoadRegionAsync(regionPosition, cancellationToken);
+        Region region = await regionLoader.LoadRegionAsync(regionPosition, cancellationToken);
 
         // 같은 요청의 중복 작업이 동시에 수행됨을 방지
         var semaphore = requestSemaphores.GetOrAdd(chunkPosition, _ => new SemaphoreSlim(1, 1));
@@ -56,15 +37,14 @@ public class FileSystemChunkLoader : IChunkLoader
 
         try
         {
-            // 초기화 안 된 청크는 초기화 작업
-            if (!result[localChunkPosition].initialized)
-                await Task.Run(() => worldGenerator.Modify(chunkPosition, result[localChunkPosition]), cancellationToken);
-
-            // 요청 세마포어 쌓이지 않게 제거
-            requestSemaphores.Remove(chunkPosition, out var value);
+            // region 내에서의 로컬 청크 좌표 계산
+            Vector2Int localChunkPosition = new(
+                (chunkPosition.x % Region.WIDTH + Region.WIDTH) % Region.WIDTH,
+                (chunkPosition.y % Region.WIDTH + Region.WIDTH) % Region.WIDTH
+            );
 
             // 결과 반환
-            return result[localChunkPosition];
+            return await region.GetChunkAsync(localChunkPosition, cancellationToken);
         }
         finally
         {

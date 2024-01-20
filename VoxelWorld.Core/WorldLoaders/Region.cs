@@ -1,7 +1,8 @@
 using System.Buffers;
 using System.Diagnostics;
+using Nito.AsyncEx;
 
-namespace VoxelWorld.Core;
+namespace VoxelWorld.Core.WorldLoaders;
 
 
 /// <summary>
@@ -14,48 +15,44 @@ namespace VoxelWorld.Core;
 /// </summary>
 public class Region
 {
+    public class Factory
+    {
+        private readonly WorldGenerator worldGenerator;
+
+
+        public Factory(WorldGenerator worldGenerator)
+        {
+            this.worldGenerator = worldGenerator;
+        }
+
+        public Region Create(in Vector2Int position) => new(worldGenerator, in position);
+    }
+
+
     /// <summary>
     /// 한 Region 당 X축, Y축 청크 개수
     /// </summary>
-    public const int WIDTH = 64;
+    public const int WIDTH = 32;
 
-
+    private readonly WorldGenerator worldGenerator;
+    private readonly Vector2Int position;
     private readonly Chunk[] chunks;
     private readonly bool[] initialized;
-    private readonly ReaderWriterLockSlim rwlock;
+    private readonly AsyncReaderWriterLock rwlock;
 
 
-    /// <summary>
-    /// 해당 LocalPosition의 Chunk를 읽습니다.
-    /// </summary>
-    public Chunk this[in Vector2Int localPosition]
+    private Region(WorldGenerator worldGenerator, in Vector2Int position)
     {
-        get
-        {
-            rwlock.EnterReadLock();
-
-            try
-            {
-                return chunks[LocalPositionToIndex(in localPosition)];
-            }
-            finally
-            {
-                rwlock.ExitReadLock();
-            }
-        }
-    }
-
-    public Region(bool clear = false)
-    {
+        this.worldGenerator = worldGenerator;
+        this.position = position;
         this.chunks = ArrayPool<Chunk>.Shared.Rent(WIDTH * WIDTH);
         this.initialized = ArrayPool<bool>.Shared.Rent(WIDTH * WIDTH);
         this.rwlock = new();
 
         for (int i = 0; i < WIDTH * WIDTH; i++)
-            this.chunks[i] = new Chunk(clear);
+            this.chunks[i] = new Chunk();
         
-        if (clear)
-            Array.Fill(this.initialized, false);
+        Array.Fill(this.initialized, false);
     }
 
     ~Region()
@@ -66,10 +63,8 @@ public class Region
 
     public void Serialize(BinaryWriter binaryWriter)
     {
-        rwlock.EnterReadLock();
-
-        try
-        {   
+        using (rwlock.ReaderLock())
+        {
             for (int i = 0; i < WIDTH * WIDTH; i++)
             {
                 binaryWriter.Write(initialized[i]);
@@ -78,17 +73,11 @@ public class Region
                     chunks[i].Serialize(binaryWriter);
             }
         }
-        finally
-        {
-            rwlock.ExitReadLock();
-        }
     }
 
     public void Deserialize(BinaryReader binaryReader)
     {
-        rwlock.EnterWriteLock();
-
-        try
+        using (rwlock.ReaderLock())
         {
             for (int i = 0; i < WIDTH * WIDTH; i++)
             {
@@ -98,10 +87,24 @@ public class Region
                     chunks[i].Deserialize(binaryReader);
             }
         }
-        finally
+    }
+
+    public async Task<Chunk> GetChunkAsync(Vector2Int localPosition, CancellationToken cancellationToken = default)
+    {
+        using (await rwlock.ReaderLockAsync(cancellationToken))
         {
-            rwlock.ExitWriteLock();
-        }   
+            int index = LocalPositionToIndex(in localPosition);
+            Chunk result = chunks[index];
+
+            if (!initialized[index])
+                await Task.Run(() =>
+                {
+                    Vector3Int worldPositionOffset = World.RegionToWorld(in position);
+                    worldGenerator.Generate(position + localPosition, result);
+                }, cancellationToken);
+
+            return result;
+        }
     }
 
     private static int LocalPositionToIndex(in Vector2Int localPosition)

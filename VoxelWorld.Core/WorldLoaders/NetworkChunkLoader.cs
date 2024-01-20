@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Threading.Tasks.Dataflow;
 using Grpc.Core;
 using VoxelWorld.Core.Proto;
 using VoxelWorld.Core.WorldLoaders;
@@ -19,15 +17,21 @@ public class NetworkChunkLoader : IChunkLoader
         this.headers = headers;
     }
 
-    public async Task<Chunk> LoadChunkAsync(Vector3Int chunkPosition, CancellationToken cancellationToken = default)
+    public async Task<Chunk> LoadChunkAsync(Vector2Int chunkPosition, CancellationToken cancellationToken = default)
     {
-        var response = await chunkLoaderClient.LoadChunkAsync(new() { ChunkPosition = chunkPosition },
+        LoadChunkRequest request = new()
+        {
+            WorldName = "world", // todo: 어떻게든 worldName을 주입받아야 한다.
+            ChunkPosition = chunkPosition
+        };
+
+        var response = await chunkLoaderClient.LoadChunkAsync(request: request,
                                                             headers: headers,
                                                             cancellationToken: cancellationToken);
 
         return await Task.Run(() =>
         {
-            Chunk chunk = new Chunk();
+            Chunk chunk = new();
             chunk.Deserialize(response);
             return chunk;
         }, cancellationToken);

@@ -5,17 +5,19 @@ using System.IO.Compression;
 namespace VoxelWorld.Core.WorldLoaders;
 
 
-public class FileSystemRegionLoader : IRegionLoader
+public class FileSystemRegionLoader
 {
-    private readonly string directoryPath;
-    private readonly Octree<Region> regionTree;
+    private readonly DirectoryInfo directory;
+    private readonly Region.Factory regionFactory;
+    private readonly QuadTreeInteger<Region> regionTree;
     private readonly ConcurrentDictionary<Vector2Int, SemaphoreSlim> requestSemaphores;
 
 
-    public FileSystemRegionLoader(string directoryPath)
+    public FileSystemRegionLoader(DirectoryInfo directory, Region.Factory regionFactory)
     {
-        this.directoryPath = directoryPath;
-        this.regionTree = new Octree<Region>(new(Vector3Int.Min / Region.BLOCK_CORNER, Vector3Int.Max / Region.BLOCK_CORNER));
+        this.directory = directory;
+        this.regionFactory = regionFactory;
+        this.regionTree = new QuadTreeInteger<Region>(new(Vector2Int.Min / (Region.WIDTH * Chunk.WIDTH), Vector2Int.Max / (Region.WIDTH * Chunk.WIDTH)));
         this.requestSemaphores = new ConcurrentDictionary<Vector2Int, SemaphoreSlim>();
     }
 
@@ -28,32 +30,29 @@ public class FileSystemRegionLoader : IRegionLoader
 
         try
         {
-            Vector3Int rPos3D = new Vector3Int(regionPosition.x, regionPosition.y, 0);
-
             // 캐싱되어 있는 region은 바로 반환
-            if (regionTree.TrySearch(rPos3D, out var result))
+            if (regionTree.TrySearch(regionPosition, out var result))
                 return result;
             
             // 캐싱되어 있지 않으니 직접 생성하여 메모리에 올리기
-            result = new Region();
-
-            await Task.Run(() =>
+            result = await Task.Run(() =>
             {
-                string regionPath = Path.Combine(directoryPath, $"{regionPosition.x}_{regionPosition.y}.region");
+                var result = regionFactory.Create(in regionPosition);
+                string regionPath = Path.Combine(directory.FullName, $"{regionPosition.x}_{regionPosition.y}.region");
                 
                 // 파일 시스템에서 이미 Region이 존재하는지 확인하고 읽어들임
                 if (!File.Exists(regionPath))
-                    return;
+                    return result;
+                
                 using FileStream fileStream = File.OpenRead(regionPath);
                 using GZipStream gZipStream = new GZipStream(fileStream, CompressionMode.Decompress);
                 using BinaryReader binaryReader = new BinaryReader(gZipStream);
                 result.Deserialize(binaryReader);
-
+                return result;
             }, cancellationToken);
 
-
             // 나중에 빠르게 접근하기 위한 캐싱
-            await Task.Run(() => regionTree.Insert(rPos3D, result), cancellationToken);
+            await Task.Run(() => regionTree.Insert(regionPosition, result), cancellationToken);
             // 요청 세마포어 쌓이지 않게 제거
             requestSemaphores.Remove(regionPosition, out var value);
 
@@ -66,34 +65,4 @@ public class FileSystemRegionLoader : IRegionLoader
         }
     }
 
-    public async Task Save()
-    {
-        List<Task> tasks = new List<Task>();
-
-        regionTree.Preorder((position, region) =>
-            tasks.Add(Task.Run(() => Save(directoryPath, new Vector2Int(position.x, position.y), region))));
-        
-        await Task.WhenAll(tasks);
-    }
-
-    private static void Save(string path, Vector2Int position, Region region)
-    {
-        string tempPath = Path.GetTempFileName();
-
-        // 임시 파일에 쓰기
-        using (FileStream fileStream = File.OpenWrite(tempPath))
-        {
-            using GZipStream gZipStream = new GZipStream(fileStream, CompressionLevel.Optimal);
-            using BinaryWriter binaryWriter = new BinaryWriter(gZipStream);
-            region.Serialize(binaryWriter);
-        }
-        
-        Directory.CreateDirectory(path);
-        path = Path.Combine(path, $"{position.x}_{position.y}.region");
-
-        if (File.Exists(path))
-            File.Delete(path);
-        
-        File.Move(tempPath, path);
-    }
 }

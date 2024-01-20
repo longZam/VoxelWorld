@@ -9,5 +9,5 @@ public interface IChunkLoader
     /// <summary>
     /// 대상 좌표의 청크 클래스를 비동기로 로딩하여 반환합니다.
     /// </summary>
-    Task<Chunk> LoadChunkAsync(Vector3Int chunkPosition, CancellationToken cancellationToken = default);
+    Task<Chunk> LoadChunkAsync(Vector2Int chunkPosition, CancellationToken cancellationToken = default);
 }

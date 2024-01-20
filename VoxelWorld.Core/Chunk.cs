@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Diagnostics;
+using Nito.AsyncEx;
 using VoxelWorld.Core.Proto;
 
 namespace VoxelWorld.Core;
@@ -26,14 +27,14 @@ public class Chunk
     /// <summary>
     /// 한 청크 당 밑면의 블록 개수
     /// </summary>
-    public const int BOTTOM = WIDTH * HEIGHT;
+    public const int BOTTOM = WIDTH * WIDTH;
     /// <summary>
     /// 한 청크 당 블록 개수
     /// </summary>
     public const int VOLUME = BOTTOM * HEIGHT;
 
     private readonly ushort[] rawData;
-    private readonly ReaderWriterLockSlim rwlock;
+    private readonly AsyncReaderWriterLock rwlock;
 
 
     /// <summary>
@@ -49,40 +50,26 @@ public class Chunk
     {
         get
         {
-            rwlock.EnterReadLock();
-
-            try
+            using (rwlock.ReaderLock())
             {
                 return rawData[LocalPositionToIndex(localPosition)];
-            }
-            finally
-            {
-                rwlock.ExitReadLock();
             }
         }
         set
         {
-            rwlock.ExitWriteLock();
-
-            try
+            using (rwlock.WriterLock())
             {
                 rawData[LocalPositionToIndex(localPosition)] = value;
-            }
-            finally
-            {
-                rwlock.ExitWriteLock();
             }
         }
     }
 
-
-    public Chunk(bool clear = false)
+    public Chunk()
     {
         this.rawData = ArrayPool<ushort>.Shared.Rent(VOLUME);
         this.rwlock = new();
 
-        if (clear)
-            Array.Clear(this.rawData, 0, VOLUME);
+        Array.Clear(this.rawData, 0, VOLUME);
     }
 
     ~Chunk()
@@ -92,61 +79,37 @@ public class Chunk
 
     public void Serialize(BinaryWriter binaryWriter)
     {
-        rwlock.EnterReadLock();
-
-        try
+        using (rwlock.ReaderLock())
         {
             for (int i = 0; i < VOLUME; i++)
-                    binaryWriter.Write(rawData[i]);
-        }
-        finally
-        {
-            rwlock.ExitReadLock();
+                binaryWriter.Write(rawData[i]);
         }
     }
 
     public void Deserialize(BinaryReader binaryReader)
     {
-        rwlock.EnterWriteLock();
-
-        try
+        using (rwlock.WriterLock())
         {
             for (int i = 0; i < VOLUME; i++)
                 rawData[i] = binaryReader.ReadUInt16();
-        }
-        finally
-        {
-            rwlock.ExitWriteLock();
         }
     }
 
     public void Serialize(LoadChunkResponse response)
     {
-        rwlock.EnterReadLock();
-
-        try
+        using (rwlock.ReaderLock())
         {
             for (int i = 0; i < VOLUME; i++)
                 response.RawData.Add(rawData[i]);
-        }
-        finally
-        {
-            rwlock.ExitReadLock();
         }
     }
 
     public void Deserialize(LoadChunkResponse response)
     {
-        rwlock.EnterWriteLock();
-
-        try
+        using (rwlock.WriterLock())
         {
             for (int i = 0; i < VOLUME; i++)
                 rawData[i] = (ushort)response.RawData[i];
-        }
-        finally
-        {
-            rwlock.ExitWriteLock();
         }
     }
 
@@ -155,20 +118,14 @@ public class Chunk
         if (destination.Length != VOLUME)
             throw new ArgumentException($"Buffer size must be exactly {VOLUME}.", nameof(destination));
         
-        rwlock.EnterReadLock();
-
-        try
+        using (rwlock.ReaderLock())
         {
             rawData.CopyTo(destination);
         }
-        finally
-        {
-            rwlock.ExitReadLock();
-        }
     }
 
-    public delegate void ParallelReadAction(in Vector3Int position, in ushort block);
-    public delegate void ParallelWriteAction(in Vector3Int position, ref ushort block);
+    public delegate void ParallelReadAction(in Vector3Int localPosition, ushort block);
+    public delegate ushort ParallelWriteAction(in Vector3Int localPosition, ushort previousBlock);
 
     /// <summary>
     /// 청크 내 모든 블럭에 읽기 작업을 병렬로 수행합니다.
@@ -176,18 +133,12 @@ public class Chunk
     /// <param name="action"></param>
     public void ParallelRead(ParallelReadAction action)
     {
-        rwlock.EnterReadLock();
-
-        try
+        using (rwlock.ReaderLock())
         {
             Parallel.For(0, VOLUME, i =>
             {
-                action(IndexToLocalPosition(in i), in rawData[i]);
+                action(IndexToLocalPosition(i), rawData[i]);
             });
-        }
-        finally
-        {
-            rwlock.ExitReadLock();
         }
     }
 
@@ -197,18 +148,12 @@ public class Chunk
     /// <param name="action"></param>
     public void ParallelWrite(ParallelWriteAction action)
     {
-        rwlock.EnterWriteLock();
-
-        try
+        using (rwlock.WriterLock())
         {
             Parallel.For(0, VOLUME, i =>
             {
-                action(IndexToLocalPosition(in i), ref rawData[i]);
+                rawData[i] = action(IndexToLocalPosition(i), rawData[i]);
             });
-        }
-        finally
-        {
-            rwlock.ExitWriteLock();
         }
     }
 
@@ -221,7 +166,7 @@ public class Chunk
         return localPosition.x + WIDTH * localPosition.y + BOTTOM * localPosition.z;
     }
 
-    private static Vector3Int IndexToLocalPosition(in int index)
+    private static Vector3Int IndexToLocalPosition(int index)
     {
         Debug.Assert(0 <= index && index < VOLUME, $"index must be 0 <= index < {VOLUME}, index = {index}");
 
